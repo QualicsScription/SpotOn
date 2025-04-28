@@ -1,0 +1,30 @@
+name: Organize Repository
+
+on: [workflow_dispatch]
+
+jobs:
+  organize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Organize files
+        run: |
+          # Move languages.py
+          mv Main/languages.py Main/languages/languages.py || true
+          # Add __init__.py
+          mkdir -p Main/languages
+          touch Main/languages/__init__.py
+          # Delete duplicate files
+          rm -f Main/colors.py Main/comparator.py Main/ui.py Main/utils.py Main/__main__.py
+          # Rename resource to resources
+          mv Main/src/resource Main/src/resources || true
+          # Delete unnecessary files in root
+          rm -f create_folders.bat file_comparator.log
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Organize repository files" || echo "No changes to commit"
+          git push
