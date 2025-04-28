@@ -1,0 +1,46 @@
+name: Organize and Clean Repository
+
+on:
+  workflow_dispatch:
+
+jobs:
+  organize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Organize files and clean repository
+        run: |
+          # Main/languages.py dosyasını doğru yere taşı
+          mkdir -p Main/languages
+          mv Main/languages.py Main/languages/languages.py || true
+
+          # Main/src/resource klasörünü Main/src/resources olarak yeniden adlandır
+          mv Main/src/resource Main/src/resources || true
+
+          # Main/languages klasörüne __init__.py ekle
+          touch Main/languages/__init__.py
+
+          # Gereksiz dosyaları sil
+          rm -f create_folders.bat file_comparator.log
+          rm -f Main/colors.py Main/comparator.py Main/ui.py Main/utils.py Main/__main__.py
+
+          # .gitignore oluştur veya güncelle
+          echo "
+          __pycache__/
+          *.log
+          *.pyc
+          *.pyo
+          *.pyd
+          " > .gitignore
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git commit -m "Organize repository structure: Remove duplicates, restructure folders, and add missing files" || echo "No changes to commit"
+          git push
