@@ -67,11 +67,7 @@ class LanguageManager:
                 "save_report": "Save Report",
                 "save_csv": "Save CSV",
                 "results_exported": "Results successfully exported to:",
-                "usage_instructions": "Usage:\n1. Select a folder\n2. Choose file type\n3. Set minimum similarity threshold\n4. Click Start",
-                "full_match": "Full Match",
-                "different_files": "Different Files",
-                "file_info": "File Information",
-                "comparison_details": "Comparison Details"
+                "usage_instructions": "Usage:\n1. Select a folder\n2. Choose file type\n3. Set minimum similarity threshold\n4. Click Start"
             },
             "tr": {
                 "title": "Gelişmiş Dosya Karşılaştırıcı",
@@ -128,11 +124,7 @@ class LanguageManager:
                 "save_report": "Rapor Dosyasını Kaydet",
                 "save_csv": "CSV Dosyasını Kaydet",
                 "results_exported": "Sonuçlar başarıyla dışa aktarıldı:",
-                "usage_instructions": "Kullanım:\n1. Klasör seçin\n2. Dosya tipini belirleyin\n3. Minimum benzerlik eşiğini ayarlayın\n4. Başlat butonuna tıklayın",
-                "full_match": "Tam Eşleşme",
-                "different_files": "Farklı Dosyalar",
-                "file_info": "Dosya Bilgileri",
-                "comparison_details": "Karşılaştırma Detayları"
+                "usage_instructions": "Kullanım:\n1. Klasör seçin\n2. Dosya tipini belirleyin\n3. Minimum benzerlik eşiğini ayarlayın\n4. Başlat butonuna tıklayın"
             }
         }
         if not os.path.exists(self.lang_dir):
