@@ -1,0 +1,14 @@
+{
+    "title": "Gelişmiş Dosya Karşılaştırıcı",
+    "folder": "Klasör:",
+    "browse": "Gözat",
+    "start": "Başlat",
+    "stop": "Durdur",
+    "clear": "Temizle",
+    "report": "Rapor",
+    "csv": "CSV",
+    "help": "Yardım",
+    "status_ready": "Hazır",
+    "status_running": "Çalışıyor...",
+    "status_stopped": "Durduruldu!"
+}

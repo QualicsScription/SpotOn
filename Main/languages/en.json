@@ -1,0 +1,14 @@
+{
+    "title": "Advanced File Comparator",
+    "folder": "Folder:",
+    "browse": "Browse",
+    "start": "Start",
+    "stop": "Stop",
+    "clear": "Clear",
+    "report": "Report",
+    "csv": "CSV",
+    "help": "Help",
+    "status_ready": "Ready",
+    "status_running": "Running...",
+    "status_stopped": "Stopped!"
+}
