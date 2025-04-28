@@ -1,51 +1,60 @@
+# Main/src/ui/visual_analysis.py
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit
-from src.resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR
+from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR
 
 class VisualAnalysis(QWidget):
-    def __init__(self, parent, lang):
+    def __init__(self, parent):
         super().__init__(parent)
-        self.lang = lang
         self.parent = parent
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.fig, self.ax = plt.subplots(figsize=(6, 4), facecolor=BACKGROUND_COLOR)
-        self.fig.set_facecolor(BACKGROUND_COLOR)
-        self.ax.set_facecolor(BACKGROUND_COLOR)
-        self.ax.tick_params(colors=TEXT_COLOR)
+        self.fig, self.ax = plt.subplots(figsize=(6, 4))
         self.canvas = FigureCanvas(self.fig)
-        self.canvas.setStyleSheet(f"background-color: {BACKGROUND_COLOR};")
         layout.addWidget(self.canvas)
+
         self.stats_text = QTextEdit()
-        self.stats_text.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; font-size: 12px;")
-        self.stats_text.setMinimumHeight(150)
+        self.stats_text.setReadOnly(True)
+        self.stats_text.setStyleSheet(f"background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR};")
         layout.addWidget(self.stats_text)
 
-    def update_visual(self, results):
-        if not results:
-            return
+    def update_visual_analysis(self, results):
         self.ax.clear()
+        if not results:
+            self.canvas.draw()
+            return
+
         scores = [float(r['Toplam']) for r in results]
-        similarity_ranges = {'95-100': 0, '75-95': 0, '50-75': 0, '25-50': 0, '0-25': 0}
+        similarity_ranges = {}
         for score in scores:
-            similarity_ranges['95-100' if score >= 95 else '75-95' if score >= 75 else '50-75' if score >= 50 else '25-50' if score >= 25 else '0-25'] += 1
-        labels, sizes = zip(*[(f"{k}% ({v})", v) for k, v in similarity_ranges.items() if v > 0])
+            if score >= 95: similarity_ranges.setdefault('95-100', 0); similarity_ranges['95-100'] += 1
+            elif score >= 75: similarity_ranges.setdefault('75-95', 0); similarity_ranges['75-95'] += 1
+            elif score >= 50: similarity_ranges.setdefault('50-75', 0); similarity_ranges['50-75'] += 1
+            elif score >= 25: similarity_ranges.setdefault('25-50', 0); similarity_ranges['25-50'] += 1
+            else: similarity_ranges.setdefault('0-25', 0); similarity_ranges['0-25'] += 1
+
+        labels = [f"{k}% ({v})" for k, v in sorted(similarity_ranges.items())]
+        sizes = [similarity_ranges[k] for k in sorted(similarity_ranges.keys())]
+
         if sizes:
-            self.ax.pie(sizes, labels=labels, autopct='%1.1f%%', shadow=True, startangle=90, textprops={'color': TEXT_COLOR, 'fontsize': 10})
+            self.ax.pie(sizes, labels=labels, autopct='%1.1f%%', shadow=True, startangle=90)
             self.ax.axis('equal')
             self.canvas.draw()
-        self.stats_text.setText(f"📊 {self.lang.get('similarity_stats')}\n==============================\n"
-                                f"{self.lang.get('total_comparisons')}: {len(results)}\n"
-                                f"{self.lang.get('average_similarity')}: {np.mean(scores):.2f}%\n"
-                                f"{self.lang.get('maximum')}: {max(scores):.2f}%\n"
-                                f"{self.lang.get('minimum')}: {min(scores):.2f}%\n==============================")
 
-    def clear(self):
+        stats_text = f"""📊 BENZERLIK İSTATISTIKLERI 📊
+==============================
+Toplam Karşılaştırma: {len(results)}
+Ortalama Benzerlik: {np.mean([float(r['Toplam']) for r in results]):.2f}%
+Maksimum: {max(float(r['Toplam']) for r in results):.2f}%
+Minimum: {min(float(r['Toplam']) for r in results):.2f}%
+=============================="""
+        self.stats_text.setText(stats_text)
+
+    def clear_visual_analysis(self):
         self.ax.clear()
         self.canvas.draw()
         self.stats_text.clear()

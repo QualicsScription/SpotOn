@@ -12,10 +12,10 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLa
                              QRadioButton, QFrame, QComboBox, QSizeGrip, QApplication)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
 from PyQt5.QtGui import QColor, QFont
-from comparator import FileComparator
-from colors import *
-from languages import LanguageManager
-from utils import get_file_info, format_size
+from ..core.comparator import FileComparator
+from .colors import *
+from ..languages import LanguageManager
+from ..core.utils import get_file_info, format_size
 
 class ComparisonThread(QThread):
     progress = pyqtSignal(float, int, int)

@@ -1,37 +1,58 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QHeaderView
-from PyQt5.QtGui import QColor
-from src.resources.colors import BUTTON_COLOR, TEXT_COLOR
+# Main/src/ui/title_bar.py
+from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QComboBox
+from PyQt5.QtCore import Qt
+from ..resources.colors import TITLE_BAR_COLOR, BUTTON_COLOR, TEXT_COLOR
 
-class TableView(QWidget):
-    def __init__(self, parent, lang):
+class TitleBar(QFrame):
+    def __init__(self, parent, title):
         super().__init__(parent)
-        self.lang = lang
-        self.parent = parent
-        self.setup_ui()
+        self.setFixedHeight(30)
+        self.setStyleSheet(f"background-color: {TITLE_BAR_COLOR};")
 
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.tree = QTreeWidget()
-        self.tree.setStyleSheet(f"QTreeWidget {{ background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; }} "
-                               f"QTreeWidget::item {{ border: none; }} "
-                               f"QTreeWidget::header {{ background: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; }} "
-                               f"QTreeWidget::branch {{ background: {BUTTON_COLOR}; border: none; }}")
-        self.update_headers()
-        self.tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.tree.itemDoubleClicked.connect(self.parent.show_detail_view)
-        layout.addWidget(self.tree)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 0, 0)
 
-    def update_headers(self):
-        self.tree.setHeaderLabels([self.lang.get("file1"), self.lang.get("file2"), self.lang.get("metadata"),
-                                   self.lang.get("hash"), self.lang.get("content"), self.lang.get("structure"),
-                                   self.lang.get("total"), self.lang.get("result")])
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet(f"color: {TEXT_COLOR}; background-color: {TITLE_BAR_COLOR};")
+        layout.addWidget(self.title_label)
 
-    def clear(self):
-        self.tree.clear()
+        layout.addStretch()
 
-    def add_result(self, res):
-        item = QTreeWidgetItem([res['Dosya 1'], res['Dosya 2'], res['Metadata'], res['Hash'], res['İçerik'], res['Yapı'], res['Toplam'], res['Sonuç']])
-        total_score = float(res['Toplam'])
-        item.setBackground(0, QColor("#a8e6cf" if total_score >= 95 else "#dcedc1" if total_score >= 75 else "#ffd3b6" if total_score >= 25 else "#ffaaa5"))
-        self.tree.addTopLevelItem(item)
+        minimize_btn = QPushButton("─")
+        minimize_btn.setFixedSize(30, 30)
+        minimize_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
+        minimize_btn.clicked.connect(parent.showMinimized)
+        layout.addWidget(minimize_btn)
+
+        maximize_btn = QPushButton("□")
+        maximize_btn.setFixedSize(30, 30)
+        maximize_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
+        maximize_btn.clicked.connect(self.toggle_maximize)
+        layout.addWidget(maximize_btn)
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setStyleSheet(f"background-color: #ff5555; color: {TEXT_COLOR};")
+        close_btn.clicked.connect(parent.close)
+        layout.addWidget(close_btn)
+
+        self.start = None
+        self.setMouseTracking(True)
+        self.title_label.setMouseTracking(True)
+
+    def toggle_maximize(self):
+        if self.parent().isMaximized():
+            self.parent().showNormal()
+        else:
+            self.parent().showMaximized()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.start = event.globalPos() - self.parent().pos()
+
+    def mouseMoveEvent(self, event):
+        if self.start is not None:
+            self.parent().move(event.globalPos() - self.start)
+
+    def mouseReleaseEvent(self, event):
+        self.start = None

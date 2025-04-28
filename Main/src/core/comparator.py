@@ -1,419 +1,486 @@
+# Main/src/core/comparator.py
 import os
-import sys
 import time
-import threading
-import webbrowser
+import hashlib
+import difflib
+import logging
+from datetime import datetime
+from collections import Counter
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                             QProgressBar, QTabWidget, QTreeWidget, QTreeWidgetItem, QTextEdit, QFileDialog, QMessageBox,
-                             QRadioButton, QFrame, QComboBox, QSizeGrip, QApplication)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
-from PyQt5.QtGui import QColor, QFont
-from comparator import FileComparator
-from colors import *
-from languages import LanguageManager
-from utils import get_file_info, format_size
 
-class ComparisonThread(QThread):
-    progress = pyqtSignal(float, int, int)
-    finished = pyqtSignal()
+logging.basicConfig(
+    filename='file_comparator.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-    def __init__(self, folder, comparator, min_similarity):
-        super().__init__()
-        self.folder = folder
-        self.comparator = comparator
-        self.min_similarity = min_similarity
-        self.is_running = True
-
-    def run(self):
-        file_type = "solidworks"
-        extensions = self.comparator.supported_extensions[file_type]
-        all_files = [f for f in os.listdir(self.folder) if os.path.isfile(os.path.join(self.folder, f)) and (not extensions or os.path.splitext(f)[1].lower() in extensions)]
-        total_comparisons = len(all_files) * (len(all_files) - 1) // 2
-        processed = 0
-        self.results = []
-        for i in range(len(all_files)):
-            if not self.is_running:
-                break
-            file1 = os.path.join(self.folder, all_files[i])
-            for j in range(i + 1, len(all_files)):
-                if not self.is_running:
-                    break
-                file2 = os.path.join(self.folder, all_files[j])
-                result = self.comparator.compare_files(file1, file2)
-                if result['total'] >= self.min_similarity:
-                    self.results.append({
-                        'Dosya 1': all_files[i], 'Dosya 2': all_files[j], 'Metadata': f"{result['metadata']:.1f}",
-                        'Hash': f"{result['hash']:.1f}", 'İçerik': f"{result['content']:.1f}", 'Yapı': f"{result['structure']:.1f}",
-                        'Toplam': f"{result['total']:.1f}", 'Sonuç': result['category'], 'Path1': file1, 'Path2': file2, 'Details': result
-                    })
-                processed += 1
-                if time.time() % 0.1 < 0.01:
-                    self.progress.emit((processed / total_comparisons) * 100 if total_comparisons > 0 else 0, processed, total_comparisons)
-        self.finished.emit()
-
-class ModernFileComparator(QMainWindow):
+class SWFileParser:
     def __init__(self):
-        super().__init__()
-        self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setGeometry(100, 100, 1400, 800)
-        self.setMinimumSize(800, 600)
-        self.lang = LanguageManager()
-        self.comparator = FileComparator()
-        self.results = []
-        self.is_running = False
-        self.old_pos = None
-        self.resize_direction = None
-        self.setup_ui()
-        self.size_grip = QSizeGrip(self)
-        self.size_grip.setStyleSheet(f"background-color: {BUTTON_COLOR}; width: 20px; height: 20px;")
+        self.feature_tree_offset = 0x1000
+        self.sketch_data_offset = 0x3000
+        self.geometry_offset = -0x3000
 
-    def setup_ui(self):
-        self.setStyleSheet(f"background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR};")
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        self.create_title_bar(main_layout)
-        control_frame = QFrame()
-        control_layout = QHBoxLayout(control_frame)
-        control_layout.setContentsMargins(5, 5, 5, 5)
-        control_layout.addWidget(QLabel(self.lang.get("folder")))
-        self.folder_path = QLineEdit()
-        self.folder_path.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
-        control_layout.addWidget(self.folder_path)
-        browse_btn = QPushButton(self.lang.get("browse"))
-        browse_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
-        browse_btn.setMinimumHeight(40)
-        browse_btn.setFont(QFont("Arial", 10))
-        browse_btn.clicked.connect(self.browse_folder)
-        control_layout.addWidget(browse_btn)
-        self.file_types = {'solidworks': self.lang.get('solidworks'), 'cad': self.lang.get('cad'), 'document': self.lang.get('document'), 'image': self.lang.get('image'), 'all': self.lang.get('all_files')}
-        self.file_type_var = "solidworks"
-        self.radio_buttons = []
-        for value, text in self.file_types.items():
-            rb = QRadioButton(text)
-            rb.setChecked(value == "solidworks")
-            rb.toggled.connect(lambda checked, v=value: self.set_file_type(v) if checked else None)
-            rb.setStyleSheet(f"color: {TEXT_COLOR};")
-            control_layout.addWidget(rb)
-            self.radio_buttons.append(rb)
-        control_layout.addWidget(QLabel(self.lang.get("min_similarity")))
-        self.min_similarity = QLineEdit("0")
-        self.min_similarity.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
-        self.min_similarity.setFixedWidth(50)
-        control_layout.addWidget(self.min_similarity)
-        control_layout.addWidget(QLabel("%"))
-        control_layout.addStretch()
-        main_layout.addWidget(control_frame)
-        self.progress = QProgressBar()
-        self.progress.setStyleSheet(f"QProgressBar {{ background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; }} QProgressBar::chunk {{ background-color: {ACCENT_COLOR}; }}")
-        main_layout.addWidget(self.progress)
-        self.status_label = QLabel(self.lang.get("status_ready"))
-        self.status_label.setStyleSheet(f"color: {TEXT_COLOR}; padding: 5px;")
-        main_layout.addWidget(self.status_label)
-        self.tabs = QTabWidget()
-        self.tabs.setStyleSheet(f"QTabWidget {{ background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR}; border: none; }} QTabBar::tab {{ background: {BUTTON_COLOR}; color: {TEXT_COLOR}; padding: 8px; font-size: 12px; }} QTabBar::tab:selected {{ background: {ACCENT_COLOR}; color: {TEXT_COLOR}; }}")
-        main_layout.addWidget(self.tabs)
-        self.setup_table_view()
-        self.setup_visual_analysis()
-        self.setup_detail_panel()
-        button_frame = QFrame()
-        button_layout = QHBoxLayout(button_frame)
-        button_layout.setContentsMargins(5, 5, 5, 5)
-        self.buttons = []
-        for text, func in [(self.lang.get("start"), self.start_comparison), (self.lang.get("stop"), self.stop_comparison),
-                           (self.lang.get("clear"), self.clear_results), (self.lang.get("report"), self.generate_report),
-                           (self.lang.get("csv"), self.export_results), (self.lang.get("help"), self.show_help)]:
-            btn = QPushButton(text)
-            btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
-            btn.setMinimumHeight(40)
-            btn.setFont(QFont("Arial", 10))
-            btn.clicked.connect(func)
-            button_layout.addWidget(btn)
-            self.buttons.append(btn)
-        main_layout.addWidget(button_frame)
+    def parse_features(self, file_path):
+        try:
+            with open(file_path, 'rb') as f:
+                f.seek(self.feature_tree_offset)
+                feature_header = f.read(100)
+                feature_data = f.read(500)
 
-    def create_title_bar(self, layout):
-        title_bar = QFrame()
-        title_bar.setStyleSheet(f"background-color: {TITLE_BAR_COLOR};")
-        title_bar.setFixedHeight(30)
-        title_layout = QHBoxLayout(title_bar)
-        title_layout.setContentsMargins(5, 0, 5, 0)
-        self.title_label = QLabel(self.lang.get("title"))
-        self.title_label.setStyleSheet(f"color: {TEXT_COLOR};")
-        title_layout.addWidget(self.title_label)
-        title_layout.addStretch()
-        self.lang_combo = QComboBox()
-        self.lang_combo.addItems(["English", "Türkçe"])
-        self.lang_combo.setCurrentText("Türkçe" if self.lang.current_lang == "tr" else "English")
-        self.lang_combo.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
-        self.lang_combo.currentTextChanged.connect(self.change_language)
-        title_layout.addWidget(self.lang_combo)
-        for text, func, color in [("─", self.showMinimized, BUTTON_COLOR), ("□", self.toggle_maximize, BUTTON_COLOR), ("✕", self.close, "#ff5555")]:
-            btn = QPushButton(text)
-            btn.setFixedSize(30, 30)
-            btn.setStyleSheet(f"background-color: {color}; color: {TEXT_COLOR}; border: none;")
-            btn.clicked.connect(func)
-            title_layout.addWidget(btn)
-        layout.addWidget(title_bar)
+                f.seek(self.sketch_data_offset)
+                sketch_data = f.read(1000)
 
-    def change_language(self, lang):
-        lang_code = "tr" if lang == "Türkçe" else "en"
-        self.lang.set_language(lang_code)
-        self.update_ui_texts()
-        QApplication.processEvents()
+                f.seek(self.geometry_offset, os.SEEK_END)
+                geometry_data = f.read(2000)
 
-    def update_ui_texts(self):
-        self.title_label.setText(self.lang.get("title"))
-        self.status_label.setText(self.lang.get("status_ready"))
-        self.tabs.setTabText(0, self.lang.get("table_view"))
-        self.tabs.setTabText(1, self.lang.get("visual_analysis"))
-        self.tabs.setTabText(2, self.lang.get("detailed_analysis"))
-        self.lang_combo.setItemText(0, "English")
-        self.lang_combo.setItemText(1, "Türkçe")
-        control_frame = self.centralWidget().layout().itemAt(1).widget()
-        control_layout = control_frame.layout()
-        control_layout.itemAt(0).widget().setText(self.lang.get("folder"))
-        control_layout.itemAt(2).widget().setText(self.lang.get("browse"))
-        self.file_types = {'solidworks': self.lang.get('solidworks'), 'cad': self.lang.get('cad'), 'document': self.lang.get('document'), 'image': self.lang.get('image'), 'all': self.lang.get('all_files')}
-        for i, (value, text) in enumerate(self.file_types.items()):
-            self.radio_buttons[i].setText(text)
-        control_layout.itemAt(8).widget().setText(self.lang.get("min_similarity"))
-        for i, key in enumerate(["start", "stop", "clear", "report", "csv", "help"]):
-            self.buttons[i].setText(self.lang.get(key))
-        self.tree.setHeaderLabels([self.lang.get("file1"), self.lang.get("file2"), self.lang.get("metadata"), self.lang.get("hash"),
-                                   self.lang.get("content"), self.lang.get("structure"), self.lang.get("total"), self.lang.get("result")])
+                features = self.extract_feature_names(feature_data)
+                sketches = self.extract_sketch_data(sketch_data)
+                geometry_stats = self.extract_geometry_stats(geometry_data)
 
-    def set_file_type(self, file_type):
-        self.file_type_var = file_type
+                return {
+                    'features': features,
+                    'sketches': sketches,
+                    'geometry_stats': geometry_stats,
+                    'raw_data': {
+                        'feature_tree': feature_data,
+                        'sketch_data': sketch_data,
+                        'geometry': geometry_data
+                    }
+                }
+        except Exception as e:
+            logging.error(f"SolidWorks dosya parsing hatası: {e}")
+            return {
+                'features': [],
+                'sketches': [],
+                'geometry_stats': {},
+                'raw_data': {
+                    'feature_tree': b'',
+                    'sketch_data': b'',
+                    'geometry': b''
+                }
+            }
 
-    def start_move(self, event):
-        self.old_pos = event.globalPos()
+    def extract_feature_names(self, data):
+        try:
+            features = []
+            i = 0
+            while i < len(data):
+                if data[i] > 32 and data[i] < 127:
+                    start = i
+                    while i < len(data) and data[i] > 32 and data[i] < 127:
+                        i += 1
+                    if i - start > 3:
+                        feature_name = data[start:i].decode('ascii', errors='ignore')
+                        features.append({
+                            'name': feature_name,
+                            'offset': start,
+                            'params': {}
+                        })
+                i += 1
+            return features
+        except Exception as e:
+            logging.error(f"Feature çıkarma hatası: {e}")
+            return []
 
-    def stop_move(self, event):
-        self.old_pos = None
+    def extract_sketch_data(self, data):
+        try:
+            sketches = []
+            markers = [b'SKET', b'LINE', b'CIRC', b'RECT']
+            for marker in markers:
+                pos = 0
+                while True:
+                    pos = data.find(marker, pos)
+                    if pos == -1:
+                        break
+                    sketches.append({
+                        'type': marker.decode('ascii'),
+                        'offset': pos,
+                        'data': data[pos:pos+20]
+                    })
+                    pos += len(marker)
+            return sketches
+        except Exception as e:
+            logging.error(f"Sketch çıkarma hatası: {e}")
+            return []
 
-    def on_move(self, event):
-        if self.old_pos:
-            delta = event.globalPos() - self.old_pos
-            new_pos = self.pos() + delta
-            screen = QApplication.primaryScreen().geometry()
-            if new_pos.y() <= screen.top() + 10:
-                self.showMaximized()
-            elif new_pos.x() <= screen.left() + 10:
-                self.setGeometry(screen.left(), screen.top(), screen.width() // 2, screen.height())
-            elif new_pos.x() + self.width() >= screen.right() - 10:
-                self.setGeometry(screen.right() - screen.width() // 2, screen.top(), screen.width() // 2, screen.height())
+    def extract_geometry_stats(self, data):
+        try:
+            stats = {
+                'signature': hashlib.md5(data).digest(),
+                'data_size': len(data)
+            }
+            volume_markers = [b'VOL', b'VOLUME']
+            for marker in volume_markers:
+                pos = data.find(marker)
+                if pos != -1 and pos + len(marker) + 8 <= len(data):
+                    try:
+                        import struct
+                        stats['volume'] = abs(struct.unpack('d', data[pos+len(marker):pos+len(marker)+8])[0])
+                        break
+                    except:
+                        pass
+            if 'volume' not in stats:
+                stats['volume'] = 1.0
+            return stats
+        except Exception as e:
+            logging.error(f"Geometri istatistikleri çıkarma hatası: {e}")
+            return {'signature': b'', 'data_size': 0, 'volume': 1.0}
+
+class SolidWorksAnalyzer:
+    def __init__(self):
+        self.parser = SWFileParser()
+        self.weights = {
+            'feature_tree': 0.5,
+            'sketch_data': 0.3,
+            'geometry': 0.2,
+            'metadata': 0.1
+        }
+
+    def read_binary_chunk(self, file_path, offset, size):
+        try:
+            with open(file_path, 'rb') as f:
+                if offset < 0:
+                    f.seek(offset, os.SEEK_END)
+                else:
+                    f.seek(offset)
+                return f.read(size)
+        except Exception as e:
+            logging.error(f"Binary chunk okuma hatası: {e}")
+            return b''
+
+    def compare_feature_tree(self, file1, file2):
+        return difflib.SequenceMatcher(None,
+            self.read_binary_chunk(file1, 0x1000, 500),
+            self.read_binary_chunk(file2, 0x1000, 500)).ratio() * 100
+
+    def compare_sw_features(self, features1, features2):
+        if not features1 or not features2:
+            return 0.0
+
+        names1 = [f['name'] for f in features1]
+        names2 = [f['name'] for f in features2]
+        name_sim = difflib.SequenceMatcher(None, names1, names2).ratio()
+
+        param_sim = 0.0
+        if features1 and features2:
+            param_sim = sum(1 for f1 in features1 for f2 in features2
+                          if f1['name'] == f2['name']) / max(len(features1), len(features2))
+
+        return (name_sim * 0.7 + param_sim * 0.3) * 100
+
+    def compare_sketches(self, sketches1, sketches2):
+        if not sketches1 or not sketches2:
+            return 0.0
+
+        types1 = [s['type'] for s in sketches1]
+        types2 = [s['type'] for s in sketches2]
+
+        count1 = Counter(types1)
+        count2 = Counter(types2)
+
+        all_types = set(count1.keys()) | set(count2.keys())
+
+        if not all_types:
+            return 0.0
+
+        similarity = sum(min(count1.get(t, 0), count2.get(t, 0)) for t in all_types) / \
+                     sum(max(count1.get(t, 0), count2.get(t, 0)) for t in all_types)
+
+        return similarity * 100
+
+    def compare_geometry(self, geom1, geom2):
+        if not geom1 or not geom2:
+            return 0.0
+
+        size_sim = 0.0
+        if 'volume' in geom1 and 'volume' in geom2 and geom1['volume'] > 0 and geom2['volume'] > 0:
+            size_sim = 1.0 - abs(geom1['volume'] - geom2['volume']) / max(geom1['volume'], geom2['volume'])
+
+        sig_sim = 0.0
+        if 'signature' in geom1 and 'signature' in geom2:
+            sig_sim = difflib.SequenceMatcher(None, geom1['signature'], geom2['signature']).ratio()
+
+        return (size_sim * 0.6 + sig_sim * 0.4) * 100
+
+    def compare(self, file1, file2):
+        try:
+            data1 = self.parser.parse_features(file1)
+            data2 = self.parser.parse_features(file2)
+
+            binary_similarity = self.compare_feature_tree(file1, file2)
+
+            if binary_similarity > 99.5:
+                return {
+                    'score': 100.0,
+                    'details': {
+                        'feature_tree': 100.0,
+                        'sketch_data': 100.0,
+                        'geometry': 100.0
+                    },
+                    'size_similarity': 100.0,
+                    'match': True,
+                    'type': 'solidworks'
+                }
+
+            feature_similarity = self.compare_sw_features(data1['features'], data2['features'])
+            sketch_similarity = self.compare_sketches(data1['sketches'], data2['sketches'])
+            geometry_similarity = self.compare_geometry(data1['geometry_stats'], data2['geometry_stats'])
+
+            raw_comparisons = {}
+            for key in data1['raw_data']:
+                seq = difflib.SequenceMatcher(None, data1['raw_data'][key], data2['raw_data'][key])
+                raw_comparisons[key] = seq.ratio() * 100
+
+            size1 = os.path.getsize(file1)
+            size2 = os.path.getsize(file2)
+            size_ratio = min(size1, size2) / max(size1, size2) if max(size1, size2) > 0 else 0
+            size_similarity = size_ratio * 100
+
+            detailed_results = {
+                'feature_tree': feature_similarity,
+                'sketch_data': sketch_similarity,
+                'geometry': geometry_similarity
+            }
+
+            total_score = (
+                feature_similarity * self.weights['feature_tree'] +
+                sketch_similarity * self.weights['sketch_data'] +
+                geometry_similarity * self.weights['geometry']
+            ) / (self.weights['feature_tree'] + self.weights['sketch_data'] + self.weights['geometry'])
+
+            raw_score = sum(raw_comparisons.values()) / len(raw_comparisons) if raw_comparisons else 0
+
+            final_score = total_score * 0.8 + raw_score * 0.15 + size_similarity * 0.05
+
+            is_match = final_score > 98
+
+            return {
+                'score': final_score,
+                'details': detailed_results,
+                'raw_comparisons': raw_comparisons,
+                'size_similarity': size_similarity,
+                'match': is_match,
+                'type': 'solidworks'
+            }
+        except Exception as e:
+            logging.error(f"SolidWorks karşılaştırma hatası: {e}")
+            return {'score': 0, 'match': False, 'type': 'solidworks', 'details': {}}
+
+class GeneralComparator:
+    def __init__(self):
+        pass
+
+    def compare(self, file1, file2):
+        try:
+            stat1 = os.stat(file1)
+            stat2 = os.stat(file2)
+
+            size_diff = abs(stat1.st_size - stat2.st_size)
+            max_size = max(stat1.st_size, stat2.st_size)
+            size_similarity = (1 - (size_diff / max_size)) * 100 if max_size > 0 else 0
+
+            time_diff = abs(stat1.st_mtime - stat2.st_mtime)
+            time_similarity = max(0, 100 - (time_diff / 86400 * 100)) if time_diff < 86400 else 0
+
+            content_similarity = 0
+            try:
+                with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
+                    header1 = f1.read(1024)
+                    header2 = f2.read(1024)
+                    header_similarity = difflib.SequenceMatcher(None, header1, header2).ratio() * 100
+
+                    f1.seek(stat1.st_size // 2)
+                    f2.seek(stat2.st_size // 2)
+                    mid1 = f1.read(1024)
+                    mid2 = f2.read(1024)
+                    mid_similarity = difflib.SequenceMatcher(None, mid1, mid2).ratio() * 100
+
+                    content_similarity = (header_similarity * 0.6 + mid_similarity * 0.4)
+            except:
+                content_similarity = 0
+
+            hash_match = False
+            if size_similarity > 99:
+                try:
+                    hash1 = hashlib.md5(open(file1, 'rb').read()).hexdigest()
+                    hash2 = hashlib.md5(open(file2, 'rb').read()).hexdigest()
+                    hash_match = (hash1 == hash2)
+                except:
+                    pass
+
+            total_score = (
+                size_similarity * 0.3 +
+                time_similarity * 0.2 +
+                content_similarity * 0.5
+            )
+
+            return {
+                'score': total_score,
+                'size_similarity': size_similarity,
+                'time_similarity': time_similarity,
+                'content_similarity': content_similarity,
+                'match': hash_match,
+                'type': 'general'
+            }
+        except Exception as e:
+            logging.error(f"Genel karşılaştırma hatası: {e}")
+            return {'score': 0, 'match': False, 'type': 'general'}
+
+class FileComparator:
+    def __init__(self):
+        self.supported_extensions = {
+            'solidworks': ['.sldprt', '.sldasm', '.slddrw'],
+            'cad': ['.step', '.stp', '.iges', '.igs', '.stl', '.obj', '.dxf'],
+            'document': ['.docx', '.xlsx', '.pdf', '.txt'],
+            'image': ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'],
+            'all': []
+        }
+
+        self.solidworks_comparator = SolidWorksAnalyzer()
+        self.general_comparator = GeneralComparator()
+
+        for exts in self.supported_extensions.values():
+            self.supported_extensions['all'].extend(exts)
+
+    def detect_manipulation(self, file1, file2, comparison_results):
+        try:
+            stat1 = os.stat(file1)
+            stat2 = os.stat(file2)
+
+            indicators = {
+                'size_ratio': min(stat1.st_size, stat2.st_size) / max(stat1.st_size, stat2.st_size) if max(stat1.st_size, stat2.st_size) > 0 else 0,
+                'time_diff': 1 - (abs(stat1.st_mtime - stat2.st_mtime) / 86400 if abs(stat1.st_mtime - stat2.st_mtime) < 86400 else 0),
+                'content_injection': max(0, comparison_results['semantic']['score'] - comparison_results['hash']['score']) / 100,
+                'rename_pattern': difflib.SequenceMatcher(None, os.path.basename(file1), os.path.basename(file2)).ratio()
+            }
+
+            weights = {
+                'size_ratio': 0.2,
+                'time_diff': 0.3,
+                'content_injection': 0.3,
+                'rename_pattern': 0.2
+            }
+
+            manipulation_score = sum(indicators[key] * weights[key] for key in indicators)
+
+            manipulation_type = 'none'
+            if manipulation_score > 0.7:
+                if indicators['content_injection'] > 0.5:
+                    manipulation_type = 'content_injection'
+                elif indicators['time_diff'] > 0.8:
+                    manipulation_type = 'quick_edit'
+                elif indicators['rename_pattern'] > 0.7:
+                    manipulation_type = 'rename'
+                else:
+                    manipulation_type = 'unknown'
+
+            return {
+                'detected': manipulation_score > 0.7,
+                'score': manipulation_score * 100,
+                'type': manipulation_type,
+                'indicators': indicators
+            }
+        except Exception as e:
+            logging.error(f"Manipülasyon tespit hatası: {e}")
+            return {
+                'detected': False,
+                'score': 0,
+                'type': 'none',
+                'indicators': {}
+            }
+
+    def classify_result(self, score, hash_match, file_type):
+        if file_type == 'solidworks':
+            if hash_match: return "Tam Eşleşme"
+            elif score >= 98: return "Tam Eşleşme"
+            elif score >= 85: return "Save As Kopyası"
+            elif score >= 70: return "Küçük Değişiklikler"
+            elif score >= 40: return "Büyük Değişiklikler"
+            else: return "Farklı Dosyalar"
+        else:
+            if hash_match: return "Tam Eşleşme"
+            elif score >= 95: return "Neredeyse Aynı"
+            elif score >= 80: return "Çok Benzer"
+            elif score >= 60: return "Orta Benzerlik"
+            elif score >= 30: return "Zayıf Benzerlik"
+            else: return "Farklı Dosyalar"
+
+    def compare_files(self, file1, file2):
+        try:
+            ext = os.path.splitext(file1)[1].lower()
+            if ext in ['.sldprt', '.sldasm', '.slddrw']:
+                sw_result = self.solidworks_comparator.compare(file1, file2)
+                file_type = 'solidworks'
+
+                metadata_score = min(sw_result.get('size_similarity', 0), 30)
+                details = sw_result.get('details', {})
+                result = {
+                    'score': sw_result['score'] * 0.8 + metadata_score * 0.2,
+                    'match': sw_result.get('match', False),
+                    'size_similarity': sw_result.get('size_similarity', 0),
+                    'feature_tree': details.get('feature_tree', 0),
+                    'sketch_data': details.get('sketch_data', 0),
+                    'geometry': details.get('geometry', 0),
+                    'type': 'solidworks'
+                }
             else:
-                self.move(new_pos)
-            self.old_pos = event.globalPos()
+                result = self.general_comparator.compare(file1, file2)
+                file_type = result.get('type', 'general')
 
-    def toggle_maximize(self):
-        self.showNormal() if self.isMaximized() else self.showMaximized()
+            manipulation = self.detect_manipulation(file1, file2, {
+                'metadata': {'score': result.get('size_similarity', 0)},
+                'hash': {'score': 100 if result.get('match', False) else 0},
+                'semantic': {'score': result.get('content_similarity', 0) if file_type != 'solidworks' else result.get('geometry', 0)},
+                'structure': {'score': result.get('feature_tree', 0) if file_type == 'solidworks' else 0}
+            })
 
-    def setup_table_view(self):
-        table_tab = QWidget()
-        layout = QVBoxLayout(table_tab)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.tree = QTreeWidget()
-        self.tree.setStyleSheet(f"QTreeWidget {{ background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; }} QTreeWidget::item {{ border: none; }} QTreeWidget::header {{ background: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; }}")
-        self.tree.setHeaderLabels([self.lang.get("file1"), self.lang.get("file2"), self.lang.get("metadata"), self.lang.get("hash"),
-                                   self.lang.get("content"), self.lang.get("structure"), self.lang.get("total"), self.lang.get("result")])
-        self.tree.itemDoubleClicked.connect(self.show_detail_view)
-        layout.addWidget(self.tree)
-        self.tabs.addTab(table_tab, self.lang.get("table_view"))
+            category = self.classify_result(result['score'], result.get('match', False), file_type)
 
-    def setup_visual_analysis(self):
-        visual_tab = QWidget()
-        layout = QVBoxLayout(visual_tab)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.fig, self.ax = plt.subplots(figsize=(6, 4), facecolor=BACKGROUND_COLOR)
-        self.fig.set_facecolor(BACKGROUND_COLOR)
-        self.ax.set_facecolor(BACKGROUND_COLOR)
-        self.ax.tick_params(colors=TEXT_COLOR)
-        self.canvas = FigureCanvas(self.fig)
-        self.canvas.setStyleSheet(f"background-color: {BACKGROUND_COLOR};")
-        layout.addWidget(self.canvas)
-        self.stats_text = QTextEdit()
-        self.stats_text.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none;")
-        layout.addWidget(self.stats_text)
-        self.tabs.addTab(visual_tab, self.lang.get("visual_analysis"))
+            comparison_result = {
+                'file1': file1,
+                'file2': file2,
+                'total': result['score'],
+                'category': category,
+                'manipulation': manipulation,
+                'file_type': file_type,
+                'match': result.get('match', False)
+            }
 
-    def setup_detail_panel(self):
-        detail_tab = QTabWidget()
-        detail_tab.setStyleSheet(f"QTabWidget {{ background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR}; border: none; }} QTabBar::tab {{ background: {BUTTON_COLOR}; color: {TEXT_COLOR}; padding: 5px; }} QTabBar::tab:selected {{ background: {ACCENT_COLOR}; color: {TEXT_COLOR}; }}")
-        file_info_tab = QWidget()
-        file_layout = QHBoxLayout(file_info_tab)
-        file_layout.setContentsMargins(0, 0, 0, 0)
-        self.file1_info = QTextEdit()
-        self.file2_info = QTextEdit()
-        for w in [self.file1_info, self.file2_info]:
-            w.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none;")
-            file_layout.addWidget(w)
-        detail_tab.addTab(file_info_tab, "Dosya Bilgileri")
-        comparison_tab = QWidget()
-        comparison_layout = QVBoxLayout(comparison_tab)
-        comparison_layout.setContentsMargins(0, 0, 0, 0)
-        self.comparison_text = QTextEdit()
-        self.comparison_text.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none;")
-        comparison_layout.addWidget(self.comparison_text)
-        detail_tab.addTab(comparison_tab, "Karşılaştırma Detayları")
-        self.tabs.addTab(detail_tab, self.lang.get("detailed_analysis"))
+            if file_type == 'solidworks':
+                comparison_result.update({
+                    'metadata': result.get('size_similarity', 0),
+                    'hash': 100 if result.get('match', False) else 0,
+                    'content': result.get('geometry', 0),
+                    'structure': result.get('feature_tree', 0),
+                    'details': {
+                        'feature_tree': result.get('feature_tree', 0),
+                        'sketch_data': result.get('sketch_data', 0),
+                        'geometry': result.get('geometry', 0)
+                    }
+                })
+            else:
+                comparison_result.update({
+                    'metadata': (result.get('size_similarity', 0) * 0.7 + result.get('time_similarity', 0) * 0.3),
+                    'hash': 100 if result.get('match', False) else 0,
+                    'content': result.get('content_similarity', 0),
+                    'structure': 0
+                })
 
-    def mousePressEvent(self, event):
-        margin = 8  # Kenar tutma alanını 8 piksele çıkardım
-        if event.button() == Qt.LeftButton:
-            pos = event.pos()
-            self.resize_direction = None
-            # Kenar ve köşeler için kontrol
-            if pos.x() < margin and pos.y() < margin:
-                self.resize_direction = "top-left"
-            elif pos.x() > self.width() - margin and pos.y() < margin:
-                self.resize_direction = "top-right"
-            elif pos.x() < margin and pos.y() > self.height() - margin:
-                self.resize_direction = "bottom-left"
-            elif pos.x() > self.width() - margin and pos.y() > self.height() - margin:
-                self.resize_direction = "bottom-right"
-            elif pos.x() < margin:
-                self.resize_direction = "left"
-            elif pos.x() > self.width() - margin:
-                self.resize_direction = "right"
-            elif pos.y() < margin:
-                self.resize_direction = "top"
-            elif pos.y() > self.height() - margin:
-                self.resize_direction = "bottom"
-            self.old_pos = event.globalPos()
-
-    def mouseMoveEvent(self, event):
-        if self.resize_direction:
-            delta = event.globalPos() - self.old_pos
-            new_geometry = QRect(self.geometry())
-            if "left" in self.resize_direction:
-                new_geometry.setLeft(new_geometry.left() + delta.x())
-            if "right" in self.resize_direction:
-                new_geometry.setRight(new_geometry.right() + delta.x())
-            if "top" in self.resize_direction:
-                new_geometry.setTop(new_geometry.top() + delta.y())
-            if "bottom" in self.resize_direction:
-                new_geometry.setBottom(new_geometry.bottom() + delta.y())
-            self.setGeometry(new_geometry)
-            self.old_pos = event.globalPos()
-
-    def mouseReleaseEvent(self, event):
-        self.resize_direction = None
-        self.old_pos = None
-
-    def resizeEvent(self, event):
-        # QSizeGrip'i sağ alt köşeye yerleştir
-        grip_size = self.size_grip.sizeHint()
-        self.size_grip.setGeometry(self.width() - grip_size.width(), self.height() - grip_size.height(), grip_size.width(), grip_size.height())
-        super().resizeEvent(event)
-
-    def browse_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, self.lang.get("browse"))
-        if folder:
-            self.folder_path.setText(folder)
-
-    def start_comparison(self):
-        if self.is_running or not os.path.isdir(self.folder_path.text()):
-            QMessageBox.critical(self, "Hata", self.lang.get("invalid_folder"))
-            return
-        self.is_running = True
-        self.clear_results()
-        self.status_label.setText(self.lang.get("status_running"))
-        self.thread = ComparisonThread(self.folder_path.text(), self.comparator, int(self.min_similarity.text() or "0"))
-        self.thread.progress.connect(self.update_progress)
-        self.thread.finished.connect(self.show_results)
-        self.thread.start()
-
-    def update_progress(self, value, processed, total):
-        self.progress.setValue(int(value))
-        self.status_label.setText(f"İşlem: {processed}/{total} ({value:.1f}%)")
-
-    def show_results(self):
-        self.tree.clear()
-        header_labels = [self.lang.get("file1"), self.lang.get("file2"), self.lang.get("metadata"), self.lang.get("hash"),
-                         self.lang.get("content"), self.lang.get("structure"), self.lang.get("total"), self.lang.get("result")]
-        self.tree.setHeaderLabels(header_labels)
-        for res in self.thread.results:
-            item = QTreeWidgetItem([res['Dosya 1'], res['Dosya 2'], res['Metadata'], res['Hash'], res['İçerik'], res['Yapı'], res['Toplam'], res['Sonuç']])
-            total_score = float(res['Toplam'])
-            item.setBackground(0, QColor("#a8e6cf" if total_score >= 95 else "#dcedc1" if total_score >= 75 else "#ffd3b6" if total_score >= 25 else "#ffaaa5"))
-            self.tree.addTopLevelItem(item)
-        self.update_visual_analysis()
-        self.status_label.setText(f"{self.lang.get('completed')} {len(self.thread.results)} {self.lang.get('similar_files_found')}")
-        self.progress.setValue(100)
-        self.is_running = False
-
-    def update_visual_analysis(self):
-        if not self.thread.results:
-            return
-        self.ax.clear()
-        scores = [float(r['Toplam']) for r in self.thread.results]
-        similarity_ranges = {'95-100': 0, '75-95': 0, '50-75': 0, '25-50': 0, '0-25': 0}
-        for score in scores:
-            similarity_ranges['95-100' if score >= 95 else '75-95' if score >= 75 else '50-75' if score >= 50 else '25-50' if score >= 25 else '0-25'] += 1
-        labels, sizes = zip(*[(f"{k}% ({v})", v) for k, v in similarity_ranges.items() if v > 0])
-        if sizes:
-            self.ax.pie(sizes, labels=labels, autopct='%1.1f%%', shadow=True, startangle=90, textprops={'color': TEXT_COLOR})
-            self.ax.axis('equal')
-            self.canvas.draw()
-        self.stats_text.setText(f"📊 {self.lang.get('similarity_stats')}\n==============================\n{self.lang.get('total_comparisons')}: {len(self.thread.results)}\n{self.lang.get('average_similarity')}: {np.mean(scores):.2f}%\n{self.lang.get('maximum')}: {max(scores):.2f}%\n{self.lang.get('minimum')}: {min(scores):.2f}%\n==============================")
-
-    def show_detail_view(self, item, column):
-        for res in self.thread.results:
-            if res['Dosya 1'] == item.text(0) and res['Dosya 2'] == item.text(1):
-                self.tabs.setCurrentIndex(2)
-                self.file1_info.setText(get_file_info(res['Path1']))
-                self.file2_info.setText(get_file_info(res['Path2']))
-                details = res['Details']
-                text = f"🔍 {self.lang.get('detailed_comparison')}\n==========================\n{self.lang.get('file1')}: {res['Dosya 1']}\n{self.lang.get('file2')}: {res['Dosya 2']}\n{self.lang.get('total_similarity')}: {details['total']:.2f}%\n{self.lang.get('result')}: {details['category']}\n{self.lang.get('file_type')}: {details['file_type']}\n\n📊 {self.lang.get('weighted_scores')}:\n- {self.lang.get('metadata')}: {details['metadata']:.2f}%\n- {self.lang.get('hash')}: {details['hash']:.2f}%\n- {self.lang.get('content')}: {details['content']:.2f}%\n- {self.lang.get('structure')}: {details['structure']:.2f}%\n\n🔎 {self.lang.get('manipulation_analysis')}:\n- {self.lang.get('detection')}: {'Evet' if details['manipulation']['detected'] else 'Hayır'}\n- {self.lang.get('score')}: {details['manipulation']['score']:.2f}%\n- {self.lang.get('type')}: {details['manipulation']['type']}"
-                if details['file_type'] == 'solidworks' and 'details' in details:
-                    sw_details = details['details']
-                    text += f"\n\n📊 {self.lang.get('solidworks_detailed_analysis')}:\n---------------------------\n- {self.lang.get('feature_tree')}: {sw_details.get('feature_tree', 0):.2f}%\n- {self.lang.get('sketch_data')}: {sw_details.get('sketch_data', 0):.2f}%\n- {self.lang.get('geometry')}: {sw_details.get('geometry', 0):.2f}%"
-                self.comparison_text.setText(text)
-                break
-
-    def clear_results(self):
-        self.results = []
-        self.tree.clear()
-        self.ax.clear()
-        self.canvas.draw()
-        self.stats_text.clear()
-        self.file1_info.clear()
-        self.file2_info.clear()
-        self.comparison_text.clear()
-        self.status_label.setText(self.lang.get("status_ready"))
-        self.progress.setValue(0)
-
-    def stop_comparison(self):
-        if hasattr(self, 'thread'):
-            self.thread.is_running = False
-        self.is_running = False
-        self.status_label.setText(self.lang.get("status_stopped"))
-
-    def generate_report(self):
-        if not self.results:
-            QMessageBox.information(self, "Bilgi", self.lang.get("no_results_for_report"))
-            return
-        file_path = QFileDialog.getSaveFileName(self, self.lang.get("save_report"), "", "HTML Dosyası (*.html)")[0]
-        if file_path:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(f"<!DOCTYPE html><html lang='tr'><head><meta charset='UTF-8'><title>{self.lang.get('report')}</title><style>body{{font-family:Arial;margin:20px;}}table{{border-collapse:collapse;width:100%;}}th,td{{border:1px solid #ddd;padding:8px;}}</style></head><body><h1>{self.lang.get('report')}</h1><table><tr><th>{self.lang.get('file1')}</th><th>{self.lang.get('file2')}</th><th>{self.lang.get('metadata')}</th><th>{self.lang.get('hash')}</th><th>{self.lang.get('content')}</th><th>{self.lang.get('structure')}</th><th>{self.lang.get('total')}</th><th>{self.lang.get('result')}</th></tr>{''.join(f'<tr><td>{r['Dosya 1']}</td><td>{r['Dosya 2']}</td><td>{r['Metadata']}</td><td>{r['Hash']}</td><td>{r['İçerik']}</td><td>{r['Yapı']}</td><td>{r['Toplam']}</td><td>{r['Sonuç']}</td></tr>' for r in self.results)}</table></body></html>")
-            webbrowser.open(f'file://{os.path.realpath(file_path)}')
-
-    def export_results(self):
-        if not self.results:
-            QMessageBox.information(self, "Bilgi", self.lang.get("no_results_to_export"))
-            return
-        file_path = QFileDialog.getSaveFileName(self, self.lang.get("save_csv"), "", "CSV Dosyası (*.csv)")[0]
-        if file_path:
-            pd.DataFrame(self.results).to_csv(file_path, index=False)
-            QMessageBox.information(self, "Başarılı", f"{self.lang.get('results_exported')}\n{file_path}")
-
-    def show_help(self):
-        QMessageBox.information(self, self.lang.get("help"), self.lang.get("usage_instructions"))
+            return comparison_result
+        except Exception as e:
+            logging.error(f"Dosya karşılaştırma hatası: {e}")
+            return {
+                'file1': file1,
+                'file2': file2,
+                'metadata': 0,
+                'hash': 0,
+                'content': 0,
+                'structure': 0,
+                'total': 0,
+                'category': "Hata",
+                'manipulation': {'detected': False},
+                'file_type': 'unknown',
+                'match': False,
+                'error': str(e)
+            }
