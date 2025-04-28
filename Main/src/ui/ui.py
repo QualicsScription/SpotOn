@@ -1,17 +1,19 @@
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                            QLineEdit, QPushButton, QProgressBar, QTabWidget, 
+                            QFileDialog, QMessageBox, QRadioButton, QFrame, 
+                            QSizeGrip, QApplication)
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
+from PyQt5.QtGui import QFont
 import os
 import webbrowser
 import pandas as pd
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                             QProgressBar, QTabWidget, QFileDialog, QMessageBox, QRadioButton, QFrame, QSizeGrip, QApplication)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QPoint, QRect
-from PyQt5.QtGui import QFont
-from src.ui.title_bar import TitleBar
-from src.ui.table_view import TableView
-from src.ui.visual_analysis import VisualAnalysis
-from src.ui.detailed_analysis import DetailedAnalysis
-from src.core.comparator import FileComparator
-from src.resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR, ACCENT_COLOR
-from languages.languages import LanguageManager
+from .title_bar import TitleBar
+from .table_view import TableView
+from .visual_analysis import VisualAnalysis
+from .detailed_analysis import DetailedAnalysis
+from ..core.comparator import FileComparator
+from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR, ACCENT_COLOR
+from ...languages.languages import LanguageManager  # Düzeltildi
 
 class ComparisonThread(QThread):
     progress = pyqtSignal(float, int, int)
