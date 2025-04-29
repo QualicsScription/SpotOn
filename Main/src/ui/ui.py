@@ -1,27 +1,59 @@
 # Main/src/ui/ui.py
 import sys
-from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QFileDialog
-)
-from PyQt5.QtCore import Qt
-from ..core.comparator import FileComparator
-from ..core.utils import get_file_info
-from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR
+from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QProgressBar, QTabWidget, QFileDialog, QMessageBox, QRadioButton, QFrame, QComboBox
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QFont
+import os
 from .title_bar import TitleBar
 from .table_view import TableView
 from .visual_analysis import VisualAnalysis
-from .detailed_analysis import DetailedAnalysis
-from ..languages.languages import LanguageManager
+from ..core.comparator import FileComparator
+from ..languages.languages import LanguageManager  # LanguageManager import edildi
+from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR  # BUTTON_COLOR içe aktarıldı
+
+__version__ = "2.0.0"
+
+class ComparisonThread(QThread):
+    results_ready = pyqtSignal(object)
+    progress_changed = pyqtSignal(int, int, int)
+    status_changed = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, folder, file_type, min_similarity, comparator):
+        super().__init__()
+        self.folder = folder
+        self.file_type = file_type
+        self.min_similarity = min_similarity
+        self.comparator = comparator
+
+    def run(self):
+        try:
+            all_files = self._get_all_files(self.folder, self.file_type)
+            total_files = len(all_files)
+            self.progress_changed.emit(0, 0, total_files)
+            results = []
+
+            for index, file_pair in enumerate(all_files):
+                result = self.comparator.compare_files(file_pair[0], file_pair[1])
+                results.append(result)
+                self.progress_changed.emit(index + 1, len(results), total_files)
+
+            self.results_ready.emit(results)
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+    def _get_all_files(self, folder, file_type):
+        # Implement file retrieval logic based on folder and file_type
+        return []
 
 class ModernFileComparator(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.language_manager = LanguageManager()
+        self.language_manager = LanguageManager()  # LanguageManager örneği oluşturuldu
         self.comparator = FileComparator()
-        self.init_ui()
+        self.setup_ui()
 
-    def init_ui(self):
+    def setup_ui(self):
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet(f"background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR};")

@@ -1,6 +1,5 @@
-# Main/src/resources/colors.py
-BACKGROUND_COLOR = "#2E2E2E"
-TEXT_COLOR = "#FFFFFF"
-BUTTON_COLOR = "#4A4A4A"
-ACCENT_COLOR = "#00FF00"
-TITLE_BAR_COLOR = "#1E1E1E"
+BACKGROUND_COLOR = "#FFFFFF"  # Beyaz arka plan
+TEXT_COLOR = "#000000"        # Siyah metin
+BUTTON_COLOR = "#4CAF50"      # Yeşil buton
+ACCENT_COLOR = "#00FF00"      # Vurgu rengi
+TITLE_BAR_COLOR = "#1E1E1E"   # Başlık çubuğu rengi
