@@ -1,23 +1,27 @@
 # Main/src/ui/ui.py
 import sys
-from PyQt5.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QProgressBar, QTabWidget, QFileDialog, QMessageBox, QRadioButton, QFrame, QComboBox
+from PyQt5.QtWidgets import (
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QProgressBar, QTabWidget, QFileDialog, QMessageBox, QRadioButton, QFrame, QComboBox
+)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 import os
 from .title_bar import TitleBar
 from .table_view import TableView
 from .visual_analysis import VisualAnalysis
+from .detailed_analysis import DetailedAnalysis
 from ..core.comparator import FileComparator
-from ..languages.languages import LanguageManager  # LanguageManager import edildi
-from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR  # BUTTON_COLOR içe aktarıldı
+from ..languages.languages import LanguageManager
+from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR, ACCENT_COLOR
 
 __version__ = "2.0.0"
 
 class ComparisonThread(QThread):
-    results_ready = pyqtSignal(object)
-    progress_changed = pyqtSignal(int, int, int)
-    status_changed = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
+    progress = pyqtSignal(float, int, int)
+    result = pyqtSignal(list)
+    status = pyqtSignal(str)
+    error = pyqtSignal(str)
 
     def __init__(self, folder, file_type, min_similarity, comparator):
         super().__init__()
@@ -25,110 +29,167 @@ class ComparisonThread(QThread):
         self.file_type = file_type
         self.min_similarity = min_similarity
         self.comparator = comparator
+        self.is_running = True
 
     def run(self):
         try:
-            all_files = self._get_all_files(self.folder, self.file_type)
-            total_files = len(all_files)
-            self.progress_changed.emit(0, 0, total_files)
+            extensions = self.comparator.supported_extensions[self.file_type]
+            all_files = [
+                os.path.join(self.folder, f) for f in os.listdir(self.folder)
+                if os.path.isfile(os.path.join(self.folder, f)) and
+                (not extensions or os.path.splitext(f)[1].lower() in extensions)
+            ]
+            total_comparisons = len(all_files) * (len(all_files) - 1) // 2
+            processed = 0
             results = []
 
-            for index, file_pair in enumerate(all_files):
-                result = self.comparator.compare_files(file_pair[0], file_pair[1])
-                results.append(result)
-                self.progress_changed.emit(index + 1, len(results), total_files)
-
-            self.results_ready.emit(results)
+            for i in range(len(all_files)):
+                if not self.is_running:
+                    break
+                for j in range(i + 1, len(all_files)):
+                    if not self.is_running:
+                        break
+                    result = self.comparator.compare_files(all_files[i], all_files[j])
+                    if result['total'] >= self.min_similarity:
+                        results.append(result)
+                    processed += 1
+                    progress_value = (processed / total_comparisons) * 100 if total_comparisons > 0 else 0
+                    self.progress.emit(progress_value, processed, total_comparisons)
+            self.result.emit(results)
+            self.status.emit("Completed!")
         except Exception as e:
-            self.error_occurred.emit(str(e))
-
-    def _get_all_files(self, folder, file_type):
-        # Implement file retrieval logic based on folder and file_type
-        return []
+            self.error.emit(str(e))
 
 class ModernFileComparator(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.language_manager = LanguageManager()  # LanguageManager örneği oluşturuldu
+        self.setWindowFlags(Qt.FramelessWindowHint)
+        self.setGeometry(100, 100, 1400, 800)
+        self.setMinimumSize(800, 600)
+        self.language_manager = LanguageManager()
         self.comparator = FileComparator()
+        self.results = []
+        self.is_running = False
         self.setup_ui()
 
     def setup_ui(self):
-        self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet(f"background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR};")
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.main_widget = QWidget(self)
-        self.setCentralWidget(self.main_widget)
-        self.layout = QVBoxLayout(self.main_widget)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+        # Title Bar
+        self.title_bar = TitleBar(self, self.language_manager)
+        main_layout.addWidget(self.title_bar)
 
-        self.title_bar = TitleBar(self, self.language_manager.translate("app_title"))
-        self.layout.addWidget(self.title_bar)
+        # Control Panel
+        control_frame = QFrame()
+        control_layout = QHBoxLayout(control_frame)
+        control_layout.setContentsMargins(5, 5, 5, 5)
 
-        self.content_widget = QWidget()
-        self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(10, 10, 10, 10)
-        self.layout.addWidget(self.content_widget)
+        control_layout.addWidget(QLabel(self.language_manager.translate("folder")))
+        self.folder_path = QLineEdit()
+        self.folder_path.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
+        control_layout.addWidget(self.folder_path)
 
-        self.button_layout = QHBoxLayout()
-        self.select_button_1 = QPushButton(self.language_manager.translate("select_file_1"))
-        self.select_button_1.setStyleSheet(f"background-color: {BUTTON_COLOR};")
-        self.select_button_1.clicked.connect(self.select_file_1)
-        self.button_layout.addWidget(self.select_button_1)
+        browse_btn = QPushButton(self.language_manager.translate("browse"))
+        browse_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        browse_btn.clicked.connect(self.browse_folder)
+        control_layout.addWidget(browse_btn)
 
-        self.select_button_2 = QPushButton(self.language_manager.translate("select_file_2"))
-        self.select_button_2.setStyleSheet(f"background-color: {BUTTON_COLOR};")
-        self.select_button_2.clicked.connect(self.select_file_2)
-        self.button_layout.addWidget(self.select_button_2)
+        control_layout.addWidget(QLabel(self.language_manager.translate("min_similarity")))
+        self.min_similarity = QLineEdit("0")
+        self.min_similarity.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
+        self.min_similarity.setFixedWidth(50)
+        control_layout.addWidget(self.min_similarity)
+        control_layout.addWidget(QLabel("%"))
 
-        self.compare_button = QPushButton(self.language_manager.translate("compare"))
-        self.compare_button.setStyleSheet(f"background-color: {BUTTON_COLOR};")
-        self.compare_button.clicked.connect(self.compare_files)
-        self.button_layout.addWidget(self.compare_button)
+        main_layout.addWidget(control_frame)
 
-        self.content_layout.addLayout(self.button_layout)
+        # Progress Bar
+        self.progress = QProgressBar()
+        self.progress.setStyleSheet(f"QProgressBar {{ background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; }} QProgressBar::chunk {{ background-color: {ACCENT_COLOR}; }}")
+        main_layout.addWidget(self.progress)
 
-        self.file_info_1 = QLabel(self.language_manager.translate("no_file_selected"))
-        self.file_info_1.setAlignment(Qt.AlignCenter)
-        self.content_layout.addWidget(self.file_info_1)
+        # Status Label
+        self.status_label = QLabel(self.language_manager.translate("status_ready"))
+        self.status_label.setStyleSheet(f"color: {TEXT_COLOR}; padding: 5px;")
+        main_layout.addWidget(self.status_label)
 
-        self.file_info_2 = QLabel(self.language_manager.translate("no_file_selected"))
-        self.file_info_2.setAlignment(Qt.AlignCenter)
-        self.content_layout.addWidget(self.file_info_2)
+        # Tabs
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(f"QTabWidget {{ background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR}; border: none; }}")
+        main_layout.addWidget(self.tabs)
 
         self.table_view = TableView(self)
-        self.content_layout.addWidget(self.table_view)
-
         self.visual_analysis = VisualAnalysis(self)
-        self.content_layout.addWidget(self.visual_analysis)
-
         self.detailed_analysis = DetailedAnalysis(self)
-        self.content_layout.addWidget(self.detailed_analysis)
 
-        self.file_path_1 = None
-        self.file_path_2 = None
+        self.tabs.addTab(self.table_view, self.language_manager.translate("table_view"))
+        self.tabs.addTab(self.visual_analysis, self.language_manager.translate("visual_analysis"))
+        self.tabs.addTab(self.detailed_analysis, self.language_manager.translate("detailed_analysis"))
 
-        self.setGeometry(100, 100, 800, 600)
+        # Buttons
+        button_frame = QFrame()
+        button_layout = QHBoxLayout(button_frame)
+        button_layout.setContentsMargins(5, 5, 5, 5)
 
-    def select_file_1(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, self.language_manager.translate("select_file_1"))
-        if file_path:
-            self.file_path_1 = file_path
-            self.file_info_1.setText(get_file_info(file_path))
+        start_btn = QPushButton(self.language_manager.translate("start"))
+        start_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        start_btn.clicked.connect(self.start_comparison)
+        button_layout.addWidget(start_btn)
 
-    def select_file_2(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, self.language_manager.translate("select_file_2"))
-        if file_path:
-            self.file_path_2 = file_path
-            self.file_info_2.setText(get_file_info(file_path))
+        stop_btn = QPushButton(self.language_manager.translate("stop"))
+        stop_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        stop_btn.clicked.connect(self.stop_comparison)
+        button_layout.addWidget(stop_btn)
 
-    def compare_files(self):
-        if not self.file_path_1 or not self.file_path_2:
+        main_layout.addWidget(button_frame)
+
+    def browse_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, self.language_manager.translate("browse"))
+        if folder:
+            self.folder_path.setText(folder)
+
+    def start_comparison(self):
+        if self.is_running or not os.path.isdir(self.folder_path.text()):
+            QMessageBox.critical(self, "Error", self.language_manager.translate("invalid_folder"))
             return
+        self.is_running = True
+        self.clear_results()
+        self.status_label.setText(self.language_manager.translate("status_running"))
+        self.thread = ComparisonThread(self.folder_path.text(), "all", int(self.min_similarity.text() or "0"), self.comparator)
+        self.thread.progress.connect(self.update_progress)
+        self.thread.result.connect(self.show_results)
+        self.thread.status.connect(self.update_status)
+        self.thread.error.connect(self.show_error)
+        self.thread.start()
 
-        result = self.comparator.compare_files(self.file_path_1, self.file_path_2)
-        self.table_view.update_table(result)
-        self.visual_analysis.update_visualization(result)
-        self.detailed_analysis.update_analysis(result)
+    def update_progress(self, value, processed, total):
+        self.progress.setValue(int(value))
+        self.status_label.setText(f"Processed: {processed}/{total} ({value:.1f}%)")
+
+    def show_results(self, results):
+        self.table_view.clear()
+        for res in results:
+            self.table_view.add_result(res)
+        self.results = results
+        self.visual_analysis.update_visual_analysis(results)
+        self.status_label.setText(f"Completed! {len(results)} similar files found.")
+        self.progress.setValue(100)
+        self.is_running = False
+
+    def stop_comparison(self):
+        if hasattr(self, 'thread'):
+            self.thread.is_running = False
+        self.is_running = False
+        self.status_label.setText(self.language_manager.translate("status_stopped"))
+
+    def clear_results(self):
+        self.results = []
+        self.table_view.clear()
+        self.visual_analysis.clear_visual_analysis()
+        self.detailed_analysis.clear()
+        self.status_label.setText(self.language_manager.translate("status_ready"))
+        self.progress.setValue(0)
