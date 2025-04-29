@@ -336,12 +336,33 @@ class FileComparator:
             'image': ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'],
             'all': []
         }
-
         self.solidworks_comparator = SolidWorksAnalyzer()
         self.general_comparator = GeneralComparator()
-
         for exts in self.supported_extensions.values():
             self.supported_extensions['all'].extend(exts)
+
+    def compare_files(self, file1, file2):
+        try:
+            ext = os.path.splitext(file1)[1].lower()
+            if ext in self.supported_extensions['solidworks']:
+                result = self.solidworks_comparator.compare(file1, file2)
+                file_type = 'solidworks'
+            else:
+                result = self.general_comparator.compare(file1, file2)
+                file_type = result.get('type', 'general')
+
+            category = self.classify_result(result['score'], result.get('match', False), file_type)
+            return {
+                'file1': file1,
+                'file2': file2,
+                'total': result['score'],
+                'category': category,
+                'file_type': file_type,
+                'details': result
+            }
+        except Exception as e:
+            logging.error(f"Dosya karşılaştırma hatası: {e}")
+            return {'file1': file1, 'file2': file2, 'error': str(e)}
 
     def detect_manipulation(self, file1, file2, comparison_results):
         try:
@@ -405,82 +426,3 @@ class FileComparator:
             elif score >= 60: return "Orta Benzerlik"
             elif score >= 30: return "Zayıf Benzerlik"
             else: return "Farklı Dosyalar"
-
-    def compare_files(self, file1, file2):
-        try:
-            ext = os.path.splitext(file1)[1].lower()
-            if ext in ['.sldprt', '.sldasm', '.slddrw']:
-                sw_result = self.solidworks_comparator.compare(file1, file2)
-                file_type = 'solidworks'
-
-                metadata_score = min(sw_result.get('size_similarity', 0), 30)
-                details = sw_result.get('details', {})
-                result = {
-                    'score': sw_result['score'] * 0.8 + metadata_score * 0.2,
-                    'match': sw_result.get('match', False),
-                    'size_similarity': sw_result.get('size_similarity', 0),
-                    'feature_tree': details.get('feature_tree', 0),
-                    'sketch_data': details.get('sketch_data', 0),
-                    'geometry': details.get('geometry', 0),
-                    'type': 'solidworks'
-                }
-            else:
-                result = self.general_comparator.compare(file1, file2)
-                file_type = result.get('type', 'general')
-
-            manipulation = self.detect_manipulation(file1, file2, {
-                'metadata': {'score': result.get('size_similarity', 0)},
-                'hash': {'score': 100 if result.get('match', False) else 0},
-                'semantic': {'score': result.get('content_similarity', 0) if file_type != 'solidworks' else result.get('geometry', 0)},
-                'structure': {'score': result.get('feature_tree', 0) if file_type == 'solidworks' else 0}
-            })
-
-            category = self.classify_result(result['score'], result.get('match', False), file_type)
-
-            comparison_result = {
-                'file1': file1,
-                'file2': file2,
-                'total': result['score'],
-                'category': category,
-                'manipulation': manipulation,
-                'file_type': file_type,
-                'match': result.get('match', False)
-            }
-
-            if file_type == 'solidworks':
-                comparison_result.update({
-                    'metadata': result.get('size_similarity', 0),
-                    'hash': 100 if result.get('match', False) else 0,
-                    'content': result.get('geometry', 0),
-                    'structure': result.get('feature_tree', 0),
-                    'details': {
-                        'feature_tree': result.get('feature_tree', 0),
-                        'sketch_data': result.get('sketch_data', 0),
-                        'geometry': result.get('geometry', 0)
-                    }
-                })
-            else:
-                comparison_result.update({
-                    'metadata': (result.get('size_similarity', 0) * 0.7 + result.get('time_similarity', 0) * 0.3),
-                    'hash': 100 if result.get('match', False) else 0,
-                    'content': result.get('content_similarity', 0),
-                    'structure': 0
-                })
-
-            return comparison_result
-        except Exception as e:
-            logging.error(f"Dosya karşılaştırma hatası: {e}")
-            return {
-                'file1': file1,
-                'file2': file2,
-                'metadata': 0,
-                'hash': 0,
-                'content': 0,
-                'structure': 0,
-                'total': 0,
-                'category': "Hata",
-                'manipulation': {'detected': False},
-                'file_type': 'unknown',
-                'match': False,
-                'error': str(e)
-            }

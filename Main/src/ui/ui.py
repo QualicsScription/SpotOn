@@ -11,8 +11,8 @@ from .title_bar import TitleBar
 from .table_view import TableView
 from .visual_analysis import VisualAnalysis
 from .detailed_analysis import DetailedAnalysis
-from ..core.comparator import FileComparator
-from ..languages.languages import LanguageManager
+from ..core.comparator import FileComparator  # FileComparator sınıfı eklendi
+from ..languages.languages import LanguageManager  # Dil desteği için eklendi
 from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR, ACCENT_COLOR
 
 __version__ = "2.0.0"
@@ -66,8 +66,8 @@ class ModernFileComparator(QMainWindow):
         self.setWindowFlags(Qt.FramelessWindowHint)
         self.setGeometry(100, 100, 1400, 800)
         self.setMinimumSize(800, 600)
-        self.language_manager = LanguageManager()
-        self.comparator = FileComparator()
+        self.lang = LanguageManager()  # Dil yöneticisi
+        self.comparator = FileComparator()  # FileComparator örneği
         self.results = []
         self.is_running = False
         self.setup_ui()
@@ -80,7 +80,7 @@ class ModernFileComparator(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Title Bar
-        self.title_bar = TitleBar(self, self.language_manager)
+        self.title_bar = TitleBar(self, self.lang)
         main_layout.addWidget(self.title_bar)
 
         # Control Panel
@@ -88,17 +88,17 @@ class ModernFileComparator(QMainWindow):
         control_layout = QHBoxLayout(control_frame)
         control_layout.setContentsMargins(5, 5, 5, 5)
 
-        control_layout.addWidget(QLabel(self.language_manager.translate("folder")))
+        control_layout.addWidget(QLabel(self.lang.translate("folder")))
         self.folder_path = QLineEdit()
         self.folder_path.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
         control_layout.addWidget(self.folder_path)
 
-        browse_btn = QPushButton(self.language_manager.translate("browse"))
+        browse_btn = QPushButton(self.lang.translate("browse"))
         browse_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
         browse_btn.clicked.connect(self.browse_folder)
         control_layout.addWidget(browse_btn)
 
-        control_layout.addWidget(QLabel(self.language_manager.translate("min_similarity")))
+        control_layout.addWidget(QLabel(self.lang.translate("min_similarity")))
         self.min_similarity = QLineEdit("0")
         self.min_similarity.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
         self.min_similarity.setFixedWidth(50)
@@ -113,7 +113,7 @@ class ModernFileComparator(QMainWindow):
         main_layout.addWidget(self.progress)
 
         # Status Label
-        self.status_label = QLabel(self.language_manager.translate("status_ready"))
+        self.status_label = QLabel(self.lang.translate("status_ready"))
         self.status_label.setStyleSheet(f"color: {TEXT_COLOR}; padding: 5px;")
         main_layout.addWidget(self.status_label)
 
@@ -122,25 +122,25 @@ class ModernFileComparator(QMainWindow):
         self.tabs.setStyleSheet(f"QTabWidget {{ background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR}; border: none; }}")
         main_layout.addWidget(self.tabs)
 
-        self.table_view = TableView(self)
-        self.visual_analysis = VisualAnalysis(self)
-        self.detailed_analysis = DetailedAnalysis(self)
+        self.table_view = TableView(self, self.lang)
+        self.visual_analysis = VisualAnalysis(self, self.lang)
+        self.detailed_analysis = DetailedAnalysis(self, self.lang)
 
-        self.tabs.addTab(self.table_view, self.language_manager.translate("table_view"))
-        self.tabs.addTab(self.visual_analysis, self.language_manager.translate("visual_analysis"))
-        self.tabs.addTab(self.detailed_analysis, self.language_manager.translate("detailed_analysis"))
+        self.tabs.addTab(self.table_view, self.lang.translate("table_view"))
+        self.tabs.addTab(self.visual_analysis, self.lang.translate("visual_analysis"))
+        self.tabs.addTab(self.detailed_analysis, self.lang.translate("detailed_analysis"))
 
         # Buttons
         button_frame = QFrame()
         button_layout = QHBoxLayout(button_frame)
         button_layout.setContentsMargins(5, 5, 5, 5)
 
-        start_btn = QPushButton(self.language_manager.translate("start"))
+        start_btn = QPushButton(self.lang.translate("start"))
         start_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
         start_btn.clicked.connect(self.start_comparison)
         button_layout.addWidget(start_btn)
 
-        stop_btn = QPushButton(self.language_manager.translate("stop"))
+        stop_btn = QPushButton(self.lang.translate("stop"))
         stop_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
         stop_btn.clicked.connect(self.stop_comparison)
         button_layout.addWidget(stop_btn)
@@ -148,18 +148,23 @@ class ModernFileComparator(QMainWindow):
         main_layout.addWidget(button_frame)
 
     def browse_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, self.language_manager.translate("browse"))
+        folder = QFileDialog.getExistingDirectory(self, self.lang.translate("browse"))
         if folder:
             self.folder_path.setText(folder)
 
     def start_comparison(self):
         if self.is_running or not os.path.isdir(self.folder_path.text()):
-            QMessageBox.critical(self, "Error", self.language_manager.translate("invalid_folder"))
+            QMessageBox.critical(self, "Error", self.lang.translate("invalid_folder"))
             return
         self.is_running = True
         self.clear_results()
-        self.status_label.setText(self.language_manager.translate("status_running"))
-        self.thread = ComparisonThread(self.folder_path.text(), "all", int(self.min_similarity.text() or "0"), self.comparator)
+        self.status_label.setText(self.lang.translate("status_running"))
+        self.thread = ComparisonThread(
+            self.folder_path.text(),
+            "all",
+            int(self.min_similarity.text() or "0"),
+            self.comparator
+        )
         self.thread.progress.connect(self.update_progress)
         self.thread.result.connect(self.show_results)
         self.thread.status.connect(self.update_status)
@@ -184,12 +189,12 @@ class ModernFileComparator(QMainWindow):
         if hasattr(self, 'thread'):
             self.thread.is_running = False
         self.is_running = False
-        self.status_label.setText(self.language_manager.translate("status_stopped"))
+        self.status_label.setText(self.lang.translate("status_stopped"))
 
     def clear_results(self):
         self.results = []
         self.table_view.clear()
         self.visual_analysis.clear_visual_analysis()
         self.detailed_analysis.clear()
-        self.status_label.setText(self.language_manager.translate("status_ready"))
+        self.status_label.setText(self.lang.translate("status_ready"))
         self.progress.setValue(0)

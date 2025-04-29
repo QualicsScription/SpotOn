@@ -13,8 +13,6 @@ class TitleBar(QWidget):
         layout.setContentsMargins(10, 0, 0, 0)
         layout.setSpacing(0)
 
-        self.title_label = QLabel(title)
-        self.title_label.setStyleSheet(f"color: {TEXT_COLOR};")
         layout.addWidget(self.title_label)
 
         layout.addStretch()
