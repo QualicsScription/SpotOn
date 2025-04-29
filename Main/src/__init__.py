@@ -1,1 +1,1 @@
-# Main/src/__init__.py
+# Bu dizini bir Python paketi olarak işaretler.
