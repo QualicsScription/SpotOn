@@ -28,7 +28,7 @@ class TitleBar(QFrame):
         self.lang_combo.addItems(["Türkçe", "English"])
         self.lang_combo.setCurrentText("Türkçe" if self.lang.current_lang == "tr" else "English")
         self.lang_combo.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
-        self.lang_combo.currentTextChanged.connect(self.parent.change_language)
+        self.lang_combo.currentTextChanged.connect(self.change_language)
         layout.addWidget(self.lang_combo)
 
         # Pencere kontrol butonları
@@ -64,3 +64,10 @@ class TitleBar(QFrame):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.is_dragging = False
+
+    def change_language(self, language):
+        if language == "Türkçe":
+            self.lang.set_language("tr")
+        elif language == "English":
+            self.lang.set_language("en")
+        self.title_label.setText(self.lang.translate("app_title"))

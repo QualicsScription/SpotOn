@@ -1,19 +1,28 @@
+import json
+import os
+
 class LanguageManager:
     def __init__(self):
-        # Basit bir çeviri sözlüğü
-        self.translations = {
-            "hello": {"en": "Hello", "tr": "Merhaba"},
-            "app_title": {"en": "Advanced File Comparator", "tr": "Gelişmiş Dosya Karşılaştırıcı"},
-            "select_file_1": {"en": "Select File 1", "tr": "Dosya 1 Seç"},
-            "select_file_2": {"en": "Select File 2", "tr": "Dosya 2 Seç"},
-            "compare": {"en": "Compare", "tr": "Karşılaştır"},
-            "no_file_selected": {"en": "No file selected", "tr": "Dosya seçilmedi"}
-        }
-        self.current_language = "en"  # Varsayılan dil
+        self.translations = {}
+        self.current_lang = "tr"  # Varsayılan dil Türkçe
+        self.load_translations()
 
-    def set_language(self, language):
-        if language in ["en", "tr"]:
-            self.current_language = language
+    def load_translations(self):
+        try:
+            lang_file = os.path.join("languages", f"{self.current_lang}.json")
+            if os.path.exists(lang_file):
+                with open(lang_file, "r", encoding="utf-8") as f:
+                    self.translations = json.load(f)
+            else:
+                print(f"Dil dosyası bulunamadı: {lang_file}")
+                self.translations = {}
+        except Exception as e:
+            print(f"Dil dosyası yüklenemedi: {e}")
+            self.translations = {}
+
+    def set_language(self, lang_code):
+        self.current_lang = lang_code
+        self.load_translations()
 
     def translate(self, key):
-        return self.translations.get(key, {}).get(self.current_language, key)
+        return self.translations.get(key, key)
