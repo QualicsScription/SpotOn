@@ -52,3 +52,9 @@ class TableView(QWidget):
                 self.parent.notebook.setCurrentWidget(self.parent.detail_panel)
                 self.parent.detail_panel.update_details(res)
                 break
+
+    def add_result(self, res):
+        item = QTreeWidgetItem([res['file1'], res['file2'], res['metadata'], res['hash'], res['content'], res['structure'], res['total'], res['result']])
+        total_score = float(res['total'])
+        item.setBackground(0, QColor("#a8e6cf" if total_score >= 95 else "#dcedc1" if total_score >= 75 else "#ffd3b6" if total_score >= 25 else "#ffaaa5"))
+        self.tree.addTopLevelItem(item)

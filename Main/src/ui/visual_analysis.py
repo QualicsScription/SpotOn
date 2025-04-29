@@ -28,7 +28,7 @@ class VisualAnalysis(QWidget):
             self.canvas.draw()
             return
 
-        scores = [float(r['Toplam']) for r in results]
+        scores = [float(r['total']) for r in results]
         similarity_ranges = {}
         for score in scores:
             if score >= 95: similarity_ranges.setdefault('95-100', 0); similarity_ranges['95-100'] += 1
@@ -48,9 +48,9 @@ class VisualAnalysis(QWidget):
         stats_text = f"""📊 BENZERLIK İSTATISTIKLERI 📊
 ==============================
 Toplam Karşılaştırma: {len(results)}
-Ortalama Benzerlik: {np.mean([float(r['Toplam']) for r in results]):.2f}%
-Maksimum: {max(float(r['Toplam']) for r in results):.2f}%
-Minimum: {min(float(r['Toplam']) for r in results):.2f}%
+Ortalama Benzerlik: {np.mean(scores):.2f}%
+Maksimum: {max(scores):.2f}%
+Minimum: {min(scores):.2f}%
 =============================="""
         self.stats_text.setText(stats_text)
 
