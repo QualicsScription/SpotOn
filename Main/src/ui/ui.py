@@ -12,7 +12,7 @@ from .title_bar import TitleBar
 from .table_view import TableView
 from .visual_analysis import VisualAnalysis
 from .detailed_analysis import DetailedAnalysis
-from languages.languages import LanguageManager
+from ..languages.languages import LanguageManager
 
 class ModernFileComparator(QMainWindow):
     def __init__(self):
