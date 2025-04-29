@@ -144,5 +144,5 @@ class LanguageManager:
         self.settings.setValue("language", lang)
         self.translations = self.load_translations()
 
-    def get(self, key):
+    def translate(self, key):
         return self.translations.get(key, key)

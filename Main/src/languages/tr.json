@@ -1,19 +1,4 @@
 {
-    "title": "Gelişmiş Dosya Karşılaştırıcı",
-    "folder": "Klasör:",
-    "browse": "Gözat",
-    "start": "Başlat",
-    "stop": "Durdur",
-    "clear": "Temizle",
-    "report": "Rapor",
-    "csv": "CSV",
-    "help": "Yardım",
-    "status_ready": "Hazır",
-    "status_running": "Çalışıyor...",
-    "status_stopped": "Durduruldu!",
-    "select_file_1": "Dosya 1 Seç",
-    "select_file_2": "Dosya 2 Seç",
-    "compare": "Karşılaştır",
-    "no_file_selected": "Dosya seçilmedi",
-    "app_title": "SpotOn - Dosya Karşılaştırıcı"
+    "file1_label": "Dosya 1:",
+    "file2_label": "Dosya 2:"
 }

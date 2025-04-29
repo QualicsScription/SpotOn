@@ -1,19 +1,4 @@
 {
-    "title": "Advanced File Comparator",
-    "folder": "Folder:",
-    "browse": "Browse",
-    "start": "Start",
-    "stop": "Stop",
-    "clear": "Clear",
-    "report": "Report",
-    "csv": "CSV",
-    "help": "Help",
-    "status_ready": "Ready",
-    "status_running": "Running...",
-    "status_stopped": "Stopped!",
-    "select_file_1": "Select File 1",
-    "select_file_2": "Select File 2",
-    "compare": "Compare",
-    "no_file_selected": "No file selected",
-    "app_title": "SpotOn - File Comparator"
+    "file1_label": "File 1:",
+    "file2_label": "File 2:"
 }
