@@ -1,50 +1,56 @@
 # Main/src/ui/title_bar.py
-from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QComboBox
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 from PyQt5.QtCore import Qt
 from ..resources.colors import TITLE_BAR_COLOR, BUTTON_COLOR, TEXT_COLOR
 
-class TitleBar(QFrame):
-    def __init__(self, parent, title):
+class TitleBar(QWidget):
+    def __init__(self, parent, title="SpotOn"):
         super().__init__(parent)
-        self.setFixedHeight(30)
+        self.setFixedHeight(40)
         self.setStyleSheet(f"background-color: {TITLE_BAR_COLOR};")
 
-        layout = QHBoxLayout(self)
+        layout = QHBoxLayout()
         layout.setContentsMargins(10, 0, 0, 0)
+        layout.setSpacing(0)
 
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet(f"color: {TEXT_COLOR}; background-color: {TITLE_BAR_COLOR};")
+        self.title_label.setStyleSheet(f"color: {TEXT_COLOR};")
         layout.addWidget(self.title_label)
 
         layout.addStretch()
 
-        minimize_btn = QPushButton("─")
-        minimize_btn.setFixedSize(30, 30)
-        minimize_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
-        minimize_btn.clicked.connect(parent.showMinimized)
-        layout.addWidget(minimize_btn)
+        self.minimize_button = QPushButton("−")
+        self.minimize_button.setFixedSize(40, 40)
+        self.minimize_button.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
+        self.minimize_button.clicked.connect(parent.showMinimized)
+        layout.addWidget(self.minimize_button)
 
-        maximize_btn = QPushButton("□")
-        maximize_btn.setFixedSize(30, 30)
-        maximize_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
-        maximize_btn.clicked.connect(self.toggle_maximize)
-        layout.addWidget(maximize_btn)
+        self.maximize_button = QPushButton("□")
+        self.maximize_button.setFixedSize(40, 40)
+        self.maximize_button.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
+        self.maximize_button.clicked.connect(self.toggle_maximize)
+        layout.addWidget(self.maximize_button)
 
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(30, 30)
-        close_btn.setStyleSheet(f"background-color: #ff5555; color: {TEXT_COLOR};")
-        close_btn.clicked.connect(parent.close)
-        layout.addWidget(close_btn)
+        self.close_button = QPushButton("×")
+        self.close_button.setFixedSize(40, 40)
+        self.close_button.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR};")
+        self.close_button.clicked.connect(parent.close)
+        layout.addWidget(self.close_button)
+
+        self.setLayout(layout)
 
         self.start = None
-        self.setMouseTracking(True)
-        self.title_label.setMouseTracking(True)
+        self.is_maximized = False
 
     def toggle_maximize(self):
-        if self.parent().isMaximized():
+        if self.is_maximized:
             self.parent().showNormal()
+            self.is_maximized = False
+            self.maximize_button.setText("□")
         else:
             self.parent().showMaximized()
+            self.is_maximized = True
+            self.maximize_button.setText("❐")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -53,6 +59,3 @@ class TitleBar(QFrame):
     def mouseMoveEvent(self, event):
         if self.start is not None:
             self.parent().move(event.globalPos() - self.start)
-
-    def mouseReleaseEvent(self, event):
-        self.start = None

@@ -10,5 +10,10 @@
     "help": "Yardım",
     "status_ready": "Hazır",
     "status_running": "Çalışıyor...",
-    "status_stopped": "Durduruldu!"
+    "status_stopped": "Durduruldu!",
+    "select_file_1": "Dosya 1 Seç",
+    "select_file_2": "Dosya 2 Seç",
+    "compare": "Karşılaştır",
+    "no_file_selected": "Dosya seçilmedi",
+    "app_title": "SpotOn - Dosya Karşılaştırıcı"
 }

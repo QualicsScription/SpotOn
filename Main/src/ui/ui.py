@@ -12,7 +12,7 @@ from .title_bar import TitleBar
 from .table_view import TableView
 from .visual_analysis import VisualAnalysis
 from .detailed_analysis import DetailedAnalysis
-from ..languages.languages import LanguageManager
+from languages.languages import LanguageManager
 
 class ModernFileComparator(QMainWindow):
     def __init__(self):
@@ -32,7 +32,7 @@ class ModernFileComparator(QMainWindow):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setSpacing(0)
 
-        self.title_bar = TitleBar(self)
+        self.title_bar = TitleBar(self, self.language_manager.translate("app_title"))
         self.layout.addWidget(self.title_bar)
 
         self.content_widget = QWidget()
