@@ -73,14 +73,15 @@ class ModernFileComparator(QMainWindow):
         self.setup_ui()
 
     def setup_ui(self):
+        self.title_bar = TitleBar(self, self.lang)
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
         self.setStyleSheet(f"background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR};")
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        central_widget.setLayout(main_layout)
 
         # Title Bar
-        self.title_bar = TitleBar(self, self.lang)
         main_layout.addWidget(self.title_bar)
 
         # Control Panel
@@ -122,7 +123,7 @@ class ModernFileComparator(QMainWindow):
         self.tabs.setStyleSheet(f"QTabWidget {{ background-color: {BACKGROUND_COLOR}; color: {TEXT_COLOR}; border: none; }}")
         main_layout.addWidget(self.tabs)
 
-        self.table_view = TableView(self, self.lang)
+        self.table_view = TableView(self, self.lang)  # lang parametresi eklendi
         self.visual_analysis = VisualAnalysis(self, self.lang)
         self.detailed_analysis = DetailedAnalysis(self, self.lang)
 
@@ -198,3 +199,10 @@ class ModernFileComparator(QMainWindow):
         self.detailed_analysis.clear()
         self.status_label.setText(self.lang.translate("status_ready"))
         self.progress.setValue(0)
+
+    def toggle_maximize(self):
+        """Pencereyi tam ekran yapar veya normal duruma getirir."""
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
