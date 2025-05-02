@@ -24,36 +24,58 @@ class VisualAnalysis(QWidget):
         layout.addWidget(self.stats_text)
 
     def update_visual_analysis(self, results):
+        """Görsel analiz panelini günceller."""
         self.ax.clear()
         if not results:
             self.canvas.draw()
             return
 
-        scores = [float(r['total']) for r in results]
-        similarity_ranges = {}
-        for score in scores:
-            if score >= 95: similarity_ranges.setdefault('95-100', 0); similarity_ranges['95-100'] += 1
-            elif score >= 75: similarity_ranges.setdefault('75-95', 0); similarity_ranges['75-95'] += 1
-            elif score >= 50: similarity_ranges.setdefault('50-75', 0); similarity_ranges['50-75'] += 1
-            elif score >= 25: similarity_ranges.setdefault('25-50', 0); similarity_ranges['25-50'] += 1
-            else: similarity_ranges.setdefault('0-25', 0); similarity_ranges['0-25'] += 1
+        try:
+            scores = [float(r['total']) for r in results]
+            similarity_ranges = {'95-100': 0, '75-95': 0, '50-75': 0, '25-50': 0, '0-25': 0}
 
-        labels = [f"{k}% ({v})" for k, v in sorted(similarity_ranges.items())]
-        sizes = [similarity_ranges[k] for k in sorted(similarity_ranges.keys())]
+            for score in scores:
+                if score >= 95:
+                    similarity_ranges['95-100'] += 1
+                elif score >= 75:
+                    similarity_ranges['75-95'] += 1
+                elif score >= 50:
+                    similarity_ranges['50-75'] += 1
+                elif score >= 25:
+                    similarity_ranges['25-50'] += 1
+                else:
+                    similarity_ranges['0-25'] += 1
 
-        if sizes:
-            self.ax.pie(sizes, labels=labels, autopct='%1.1f%%', shadow=True, startangle=90)
-            self.ax.axis('equal')
+            # Sadece değeri 0'dan büyük olan aralıkları göster
+            filtered_ranges = {k: v for k, v in similarity_ranges.items() if v > 0}
+
+            if filtered_ranges:
+                labels = [f"{k}% ({v})" for k, v in sorted(filtered_ranges.items())]
+                sizes = [filtered_ranges[k] for k in sorted(filtered_ranges.keys())]
+
+                # Renk paleti
+                colors = ['#a8e6cf', '#dcedc1', '#ffd3b6', '#ffaaa5', '#ff8b94']
+
+                self.ax.pie(sizes, labels=labels, autopct='%1.1f%%', shadow=True,
+                           startangle=90, colors=colors, textprops={'color': TEXT_COLOR})
+                self.ax.axis('equal')
+
             self.canvas.draw()
 
-        stats_text = f"""📊 {self.lang.translate('similarity_stats')} 📊
+            # İstatistik metnini güncelle
+            stats_text = f"""📊 {self.lang.translate('similarity_stats')} 📊
 ==============================
 {self.lang.translate('total_comparisons')}: {len(results)}
 {self.lang.translate('average_similarity')}: {np.mean(scores):.2f}%
 {self.lang.translate('maximum')}: {max(scores):.2f}%
 {self.lang.translate('minimum')}: {min(scores):.2f}%
 =============================="""
-        self.stats_text.setText(stats_text)
+            self.stats_text.setText(stats_text)
+
+        except Exception as e:
+            import logging
+            logging.error(f"Görsel analiz hatası: {e}")
+            self.stats_text.setText(f"Görsel analiz hatası: {str(e)}")
 
     def clear_visual_analysis(self):
         self.ax.clear()

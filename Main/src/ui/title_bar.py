@@ -10,7 +10,11 @@ class TitleBar(QFrame):
         self.lang = lang
         self.setStyleSheet(f"background-color: {TITLE_BAR_COLOR};")
         self.setFixedHeight(30)
+        self.setup_ui()
+        self.is_dragging = False
+        self.drag_position = None
 
+    def setup_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 0, 5, 0)
 
@@ -23,6 +27,7 @@ class TitleBar(QFrame):
         self.lang_combo = QComboBox()
         self.lang_combo.addItems(["Türkçe", "English"])
         self.lang_combo.setCurrentText("Türkçe" if self.lang.current_lang == "tr" else "English")
+        self.lang_combo.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 5px;")
         self.lang_combo.currentTextChanged.connect(self.change_language)
         layout.addWidget(self.lang_combo)
 
@@ -43,3 +48,27 @@ class TitleBar(QFrame):
         elif language == "English":
             self.lang.set_language("en")
         self.title_label.setText(self.lang.translate("app_title"))
+
+    def update_texts(self):
+        self.title_label.setText(self.lang.translate("app_title"))
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = True
+            self.drag_position = event.globalPos() - self.parent.pos()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self.is_dragging:
+            self.parent.move(event.globalPos() - self.drag_position)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = False
+            event.accept()
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.parent.toggle_maximize()
+            event.accept()

@@ -146,6 +146,26 @@ class ModernFileComparator(QMainWindow):
         stop_btn.clicked.connect(self.stop_comparison)
         button_layout.addWidget(stop_btn)
 
+        clear_btn = QPushButton(self.lang.translate("clear"))
+        clear_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        clear_btn.clicked.connect(self.clear_results)
+        button_layout.addWidget(clear_btn)
+
+        report_btn = QPushButton(self.lang.translate("report"))
+        report_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        report_btn.clicked.connect(self.generate_report)
+        button_layout.addWidget(report_btn)
+
+        csv_btn = QPushButton(self.lang.translate("csv"))
+        csv_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        csv_btn.clicked.connect(self.export_csv)
+        button_layout.addWidget(csv_btn)
+
+        help_btn = QPushButton(self.lang.translate("help"))
+        help_btn.setStyleSheet(f"background-color: {BUTTON_COLOR}; color: {TEXT_COLOR}; border: none; padding: 8px;")
+        help_btn.clicked.connect(self.show_help)
+        button_layout.addWidget(help_btn)
+
         main_layout.addWidget(button_frame)
 
     def browse_folder(self):
@@ -206,3 +226,166 @@ class ModernFileComparator(QMainWindow):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def show_detail_view(self, item):
+        """Seçilen dosya çiftinin detaylı analizini gösterir."""
+        index = self.table_view.tree.indexOfTopLevelItem(item)
+        if index >= 0 and index < len(self.results):
+            self.detailed_analysis.update_details(self.results[index])
+            self.tabs.setCurrentIndex(2)  # Detaylı analiz sekmesine geç
+
+    def generate_report(self):
+        """HTML rapor oluşturur ve kaydeder."""
+        if not self.results:
+            QMessageBox.warning(self, "Uyarı", self.lang.translate("no_results_for_report"))
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, self.lang.translate("save_report"), "", "HTML Files (*.html)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{self.lang.translate("app_title")} - {self.lang.translate("report")}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        h1, h2 {{ color: #4CAF50; }}
+        table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        th {{ background-color: #4CAF50; color: white; }}
+        tr:nth-child(even) {{ background-color: #f2f2f2; }}
+        .high {{ background-color: #a8e6cf; }}
+        .medium {{ background-color: #dcedc1; }}
+        .low {{ background-color: #ffd3b6; }}
+        .very-low {{ background-color: #ffaaa5; }}
+    </style>
+</head>
+<body>
+    <h1>{self.lang.translate("app_title")} - {self.lang.translate("report")}</h1>
+    <p>{self.lang.translate("total_comparisons")}: {len(self.results)}</p>
+
+    <h2>{self.lang.translate("similarity_stats")}</h2>
+    <table>
+        <tr>
+            <th>{self.lang.translate("total_comparisons")}</th>
+            <th>{self.lang.translate("average_similarity")}</th>
+            <th>{self.lang.translate("maximum")}</th>
+            <th>{self.lang.translate("minimum")}</th>
+        </tr>
+        <tr>
+            <td>{len(self.results)}</td>
+            <td>{sum(float(r['total']) for r in self.results) / len(self.results):.2f}%</td>
+            <td>{max(float(r['total']) for r in self.results):.2f}%</td>
+            <td>{min(float(r['total']) for r in self.results):.2f}%</td>
+        </tr>
+    </table>
+
+    <h2>{self.lang.translate("results")}</h2>
+    <table>
+        <tr>
+            <th>{self.lang.translate("file1")}</th>
+            <th>{self.lang.translate("file2")}</th>
+            <th>{self.lang.translate("metadata")}</th>
+            <th>{self.lang.translate("hash")}</th>
+            <th>{self.lang.translate("content")}</th>
+            <th>{self.lang.translate("structure")}</th>
+            <th>{self.lang.translate("total")}</th>
+            <th>{self.lang.translate("result")}</th>
+        </tr>
+        {"".join(f'''
+        <tr class="{'high' if float(r['total']) >= 95 else 'medium' if float(r['total']) >= 75 else 'low' if float(r['total']) >= 25 else 'very-low'}">
+            <td>{r['file1']}</td>
+            <td>{r['file2']}</td>
+            <td>{r.get('metadata', 'N/A')}</td>
+            <td>{r.get('hash', 'N/A')}</td>
+            <td>{r.get('content', 'N/A')}</td>
+            <td>{r.get('structure', 'N/A')}</td>
+            <td>{r['total']}</td>
+            <td>{r.get('category', 'N/A')}</td>
+        </tr>''' for r in self.results)}
+    </table>
+
+    <p><small>Generated by {self.lang.translate("app_title")} v{__version__}</small></p>
+</body>
+</html>""")
+
+            QMessageBox.information(
+                self, "Bilgi", f"{self.lang.translate('results_exported')} {file_path}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"Rapor oluşturma hatası: {str(e)}")
+
+    def export_csv(self):
+        """Sonuçları CSV dosyasına aktarır."""
+        if not self.results:
+            QMessageBox.warning(self, "Uyarı", self.lang.translate("no_results_to_export"))
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, self.lang.translate("save_csv"), "", "CSV Files (*.csv)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            import csv
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    self.lang.translate("file1"),
+                    self.lang.translate("file2"),
+                    self.lang.translate("metadata"),
+                    self.lang.translate("hash"),
+                    self.lang.translate("content"),
+                    self.lang.translate("structure"),
+                    self.lang.translate("total"),
+                    self.lang.translate("result")
+                ])
+
+                for r in self.results:
+                    writer.writerow([
+                        r['file1'],
+                        r['file2'],
+                        r.get('metadata', 'N/A'),
+                        r.get('hash', 'N/A'),
+                        r.get('content', 'N/A'),
+                        r.get('structure', 'N/A'),
+                        r['total'],
+                        r.get('category', 'N/A')
+                    ])
+
+            QMessageBox.information(
+                self, "Bilgi", f"{self.lang.translate('results_exported')} {file_path}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Hata", f"CSV dışa aktarma hatası: {str(e)}")
+
+    def show_help(self):
+        """Yardım mesajını gösterir."""
+        QMessageBox.information(
+            self,
+            self.lang.translate("help"),
+            self.lang.translate("usage_instructions")
+        )
+
+    def change_language(self, language):
+        """Uygulamanın dilini değiştirir."""
+        if language == "Türkçe":
+            self.lang.set_language("tr")
+        elif language == "English":
+            self.lang.set_language("en")
+
+        # Tüm metinleri güncelle
+        self.title_bar.update_texts()
+        self.table_view.update_headers()
+        self.tabs.setTabText(0, self.lang.translate("table_view"))
+        self.tabs.setTabText(1, self.lang.translate("visual_analysis"))
+        self.tabs.setTabText(2, self.lang.translate("detailed_analysis"))
