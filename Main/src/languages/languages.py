@@ -9,7 +9,10 @@ class LanguageManager:
 
     def load_translations(self):
         try:
-            lang_file = os.path.join("languages", f"{self.current_lang}.json")
+            # Önce mevcut dizinde (src/languages) arama yap
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            lang_file = os.path.join(current_dir, f"{self.current_lang}.json")
+
             if os.path.exists(lang_file):
                 with open(lang_file, "r", encoding="utf-8") as f:
                     self.translations = json.load(f)

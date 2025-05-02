@@ -9,8 +9,9 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 
+# Logging yapılandırmasını güncelle
 logging.basicConfig(
-    filename='file_comparator.log',
+    filename=os.path.join(os.path.dirname(__file__), '..', '..', '..', 'Dev', 'logs', 'file_comparator.log'),
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )

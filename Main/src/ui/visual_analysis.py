@@ -6,9 +6,10 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit
 from ..resources.colors import BACKGROUND_COLOR, TEXT_COLOR, BUTTON_COLOR
 
 class VisualAnalysis(QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent, lang):
         super().__init__(parent)
         self.parent = parent
+        self.lang = lang
         self.setup_ui()
 
     def setup_ui(self):
@@ -45,12 +46,12 @@ class VisualAnalysis(QWidget):
             self.ax.axis('equal')
             self.canvas.draw()
 
-        stats_text = f"""📊 BENZERLIK İSTATISTIKLERI 📊
+        stats_text = f"""📊 {self.lang.translate('similarity_stats')} 📊
 ==============================
-Toplam Karşılaştırma: {len(results)}
-Ortalama Benzerlik: {np.mean(scores):.2f}%
-Maksimum: {max(scores):.2f}%
-Minimum: {min(scores):.2f}%
+{self.lang.translate('total_comparisons')}: {len(results)}
+{self.lang.translate('average_similarity')}: {np.mean(scores):.2f}%
+{self.lang.translate('maximum')}: {max(scores):.2f}%
+{self.lang.translate('minimum')}: {min(scores):.2f}%
 =============================="""
         self.stats_text.setText(stats_text)
 
