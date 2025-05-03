@@ -29,7 +29,7 @@ try:
 except Exception as e:
     print(f"Logging yapılandırma hatası: {e}")
 
-__version__ = "2.1.0-beta"
+__version__ = "2.0.0"
 
 class ComparisonThread(QThread):
     progress = pyqtSignal(float, int, int)

@@ -1,5 +1,8 @@
-# Main/requirements.txt
-PyQt5==5.15.10
-numpy==1.26.4
-pandas==2.2.2
-matplotlib==3.9.2
+# Main/requirements.txt - Beta 2.1.0
+PyQt5>=5.15.10
+numpy>=1.26.4
+pandas>=2.2.2
+matplotlib>=3.9.2
+# Added for beta version
+pytest>=7.0.0  # For testing
+pylint>=2.15.0  # For code quality

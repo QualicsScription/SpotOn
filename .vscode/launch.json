@@ -1,15 +1,36 @@
 {
-    // Olası öznitelikler hakkında bilgi edinmek için IntelliSense kullanın.
-    // Mevcut özniteliklerin açıklamalarını görüntülemek için üzerine gelin.
-    // Daha fazla bilgi için şu adresi ziyaret edin: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python Hata Ayıklayıcısı: Geçerli Dosya",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
-        }
-    ]
+    "python.defaultInterpreterPath": "C:\\Program Files\\Python313\\python.exe",
+    "launch": {
+        "configurations": [
+            {
+                "name": "Python: Main File",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder}/Main/main.py",
+                "cwd": "${workspaceFolder}",
+                "console": "integratedTerminal",
+                "justMyCode": true
+            }
+        ]
+    },
+    "files.associations": {
+        "*.py": "python"
+    },
+    "[python]": {
+        "diffEditor.ignoreTrimWhitespace": false,
+        "editor.defaultColorDecorators": "never",
+        "editor.formatOnType": true,
+        "editor.wordBasedSuggestions": "off"
+    },
+    "github.copilot.enable": {
+        "*": false
+    },
+    "amazonQ.telemetry": false,
+    "git.fetchOnPull": true,
+    "amazonQ.suppressPrompts": {
+        "amazonQChatDisclaimer": true
+    },
+    "editor.unicodeHighlight.ambiguousCharacters": false,
+    "files.autoSave": "afterDelay",
+    "git.enableSmartCommit": true
 }
