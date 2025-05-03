@@ -287,46 +287,57 @@ class GeneralComparator:
 
     def compare(self, file1, file2):
         try:
+            from .utils import (
+                compare_binary_content, calculate_file_signature,
+                calculate_entropy, compare_signatures, compare_entropy
+            )
+
+            # Temel dosya bilgilerini al
             stat1 = os.stat(file1)
             stat2 = os.stat(file2)
 
+            # Boyut benzerliği
             size_diff = abs(stat1.st_size - stat2.st_size)
             max_size = max(stat1.st_size, stat2.st_size)
             size_similarity = (1 - (size_diff / max_size)) * 100 if max_size > 0 else 0
 
+            # Zaman benzerliği
             time_diff = abs(stat1.st_mtime - stat2.st_mtime)
             time_similarity = max(0, 100 - (time_diff / 86400 * 100)) if time_diff < 86400 else 0
 
-            content_similarity = 0
-            try:
-                with open(file1, 'rb') as f1, open(file2, 'rb') as f2:
-                    header1 = f1.read(1024)
-                    header2 = f2.read(1024)
-                    header_similarity = difflib.SequenceMatcher(None, header1, header2).ratio() * 100
+            # İçerik benzerliği - geliştirilmiş blok tabanlı karşılaştırma
+            content_similarity = compare_binary_content(file1, file2, block_size=2048)
 
-                    f1.seek(stat1.st_size // 2)
-                    f2.seek(stat2.st_size // 2)
-                    mid1 = f1.read(1024)
-                    mid2 = f2.read(1024)
-                    mid_similarity = difflib.SequenceMatcher(None, mid1, mid2).ratio() * 100
+            # İmza karşılaştırması
+            signature_similarity = compare_signatures(file1, file2)
 
-                    content_similarity = (header_similarity * 0.6 + mid_similarity * 0.4)
-            except:
-                content_similarity = 0
+            # Entropi karşılaştırması
+            entropy_similarity = compare_entropy(file1, file2)
 
+            # Hash karşılaştırması
             hash_match = False
+            hash_score = 0
             if size_similarity > 99:
                 try:
                     hash1 = hashlib.md5(open(file1, 'rb').read()).hexdigest()
                     hash2 = hashlib.md5(open(file2, 'rb').read()).hexdigest()
                     hash_match = (hash1 == hash2)
-                except:
-                    pass
+                    hash_score = 100 if hash_match else 0
+                except Exception as e:
+                    logging.error(f"Hash hesaplama hatası: {e}")
 
+            # Metadata skoru
+            metadata_score = (size_similarity * 0.7 + time_similarity * 0.3)
+
+            # Yapı skoru (bu durumda entropi benzerliği)
+            structure_score = entropy_similarity
+
+            # Toplam skor hesaplama - ağırlıklı ortalama
             total_score = (
-                size_similarity * 0.3 +
-                time_similarity * 0.2 +
-                content_similarity * 0.5
+                metadata_score * 0.25 +
+                hash_score * 0.25 +
+                content_similarity * 0.4 +
+                structure_score * 0.1
             )
 
             return {
@@ -334,12 +345,14 @@ class GeneralComparator:
                 'size_similarity': size_similarity,
                 'time_similarity': time_similarity,
                 'content_similarity': content_similarity,
+                'entropy_similarity': entropy_similarity,
+                'signature_similarity': signature_similarity,
                 'match': hash_match,
                 'type': 'general',
-                'metadata': size_similarity,
-                'hash': 100 if hash_match else 0,
+                'metadata': metadata_score,
+                'hash': hash_score,
                 'content': content_similarity,
-                'structure': time_similarity
+                'structure': structure_score
             }
         except Exception as e:
             logging.error(f"Genel karşılaştırma hatası: {e}")
@@ -384,32 +397,65 @@ class FileComparator:
 
     def detect_manipulation(self, file1, file2, comparison_results):
         try:
+            from .utils import calculate_entropy, calculate_file_signature
+
             stat1 = os.stat(file1)
             stat2 = os.stat(file2)
 
+            # Temel göstergeler
             indicators = {
                 'size_ratio': min(stat1.st_size, stat2.st_size) / max(stat1.st_size, stat2.st_size) if max(stat1.st_size, stat2.st_size) > 0 else 0,
                 'time_diff': 1 - (abs(stat1.st_mtime - stat2.st_mtime) / 86400 if abs(stat1.st_mtime - stat2.st_mtime) < 86400 else 0),
-                'content_injection': max(0, comparison_results.get('semantic', {}).get('score', 0) - comparison_results.get('hash', {}).get('score', 0)) / 100,
+                'content_injection': max(0, comparison_results.get('content', 0) - comparison_results.get('hash', 0)) / 100,
                 'rename_pattern': difflib.SequenceMatcher(None, os.path.basename(file1), os.path.basename(file2)).ratio()
             }
 
+            # Gelişmiş göstergeler
+            try:
+                # Entropi farkı - manipüle edilmiş dosyalarda entropi değişimi olabilir
+                entropy1 = calculate_entropy(file1)
+                entropy2 = calculate_entropy(file2)
+                entropy_diff = abs(entropy1 - entropy2) / max(entropy1, entropy2) if max(entropy1, entropy2) > 0 else 0
+                indicators['entropy_diff'] = 1 - entropy_diff  # Yüksek değer benzerliği gösterir
+
+                # İmza karşılaştırması - dosya başlangıcı değiştirilmiş mi?
+                sig1 = calculate_file_signature(file1)
+                sig2 = calculate_file_signature(file2)
+                indicators['signature_match'] = 1.0 if sig1 == sig2 else 0.0
+
+                # Metadata tutarsızlığı - dosya boyutu ve içerik arasında tutarsızlık var mı?
+                metadata_content_consistency = 1.0 - abs(indicators['size_ratio'] - (comparison_results.get('content', 0) / 100))
+                indicators['metadata_consistency'] = metadata_content_consistency
+            except Exception as e:
+                logging.error(f"Gelişmiş manipülasyon göstergeleri hesaplama hatası: {e}")
+                indicators['entropy_diff'] = 0.5
+                indicators['signature_match'] = 0.5
+                indicators['metadata_consistency'] = 0.5
+
+            # Ağırlıklar
             weights = {
-                'size_ratio': 0.2,
-                'time_diff': 0.3,
-                'content_injection': 0.3,
-                'rename_pattern': 0.2
+                'size_ratio': 0.15,
+                'time_diff': 0.20,
+                'content_injection': 0.25,
+                'rename_pattern': 0.10,
+                'entropy_diff': 0.15,
+                'signature_match': 0.05,
+                'metadata_consistency': 0.10
             }
 
+            # Manipülasyon skoru hesaplama
             manipulation_score = sum(indicators[key] * weights[key] for key in indicators)
 
+            # Manipülasyon türünü belirleme
             manipulation_type = 'none'
             if manipulation_score > 0.7:
                 if indicators['content_injection'] > 0.5:
                     manipulation_type = 'content_injection'
-                elif indicators['time_diff'] > 0.8:
+                elif indicators['entropy_diff'] < 0.3:
+                    manipulation_type = 'data_modification'
+                elif indicators['time_diff'] > 0.8 and indicators['metadata_consistency'] < 0.5:
                     manipulation_type = 'quick_edit'
-                elif indicators['rename_pattern'] > 0.7:
+                elif indicators['rename_pattern'] > 0.7 and indicators['signature_match'] > 0.8:
                     manipulation_type = 'rename'
                 else:
                     manipulation_type = 'unknown'
